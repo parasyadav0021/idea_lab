@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mentor Dashboard - Idea Lab</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .dashboard-layout { display: flex; height: 100vh; overflow: hidden; }
+        .sidebar { width: 250px; background-color: var(--surface); padding: 2rem 1.5rem; border-right: 1px solid var(--border); height: 100vh; overflow-y: auto; }
+        .main-content { flex: 1; padding: 2rem 3rem; background: radial-gradient(circle at top right, rgba(79, 70, 229, 0.05), transparent 40%); height: 100vh; overflow-y: auto; }
+        .nav-item { display: block; padding: 0.75rem 1rem; color: var(--text-muted); text-decoration: none; border-radius: 8px; margin-bottom: 0.5rem; transition: all 0.2s; cursor: pointer; }
+        .nav-item:hover, .nav-item.active { background-color: rgba(79, 70, 229, 0.1); color: var(--primary); }
+        .section-card { padding: 2rem; margin-bottom: 2rem; }
+        
+        .filter-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .group-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            overflow: hidden;
+        }
+
+        .group-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 1.5rem;
+            cursor: pointer;
+            background: rgba(255, 255, 255, 0.01);
+            transition: background 0.2s;
+        }
+        
+        .group-header:hover {
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .group-details {
+            padding: 1.5rem;
+            border-top: 1px solid var(--border);
+            display: none; /* hidden by default */
+        }
+        
+        .group-details.open {
+            display: block;
+        }
+
+        .student-list {
+            margin-top: 0.5rem;
+            display: grid;
+            grid-template-columns: 1.5fr 1fr 1.5fr 1fr;
+            gap: 1rem;
+            font-size: 0.9rem;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        
+        .student-list-header {
+            font-weight: 600;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .component-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1.5fr;
+            gap: 1rem;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border);
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+        }
+        
+        .comp-header { font-weight: 600; color: var(--text-muted); background: transparent; border: none; }
+        
+        .tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 1.5rem; }
+        .tab { padding: 0.75rem 1.5rem; cursor: pointer; color: var(--text-muted); border-bottom: 2px solid transparent; }
+        .tab.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
+    </style>
+
+</head>
+<body>
+    <div class="dashboard-layout">
+        <aside class="sidebar">
+            <h2 class="text-gradient mb-8">Idea Lab</h2>
+            <nav>
+                <a class="nav-item active">Students Directory</a>
+            </nav>
+            <div style="position: absolute; bottom: 2rem;">
+                <button onclick="logout()" class="btn btn-outline">Logout</button>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <header class="mb-8 flex justify-between items-center">
+                <h1 id="pageTitle">Students Directory</h1>
+                <div class="user-info">
+                    <span id="welcomeUser" style="color: var(--text-muted);">Welcome, Mentor</span>
+                </div>
+            </header>
+
+            <section class="glass-panel section-card">
+                <h3 class="mb-4">Filters</h3>
+                <div class="filter-row">
+                    <div class="form-group">
+                        <label>Academic Year</label>
+                        <select class="form-control" id="filterAcademicYear" onchange="loadGroups()">
+                            <option value="All">All</option>
+                            <option value="2023-24">2023-24</option>
+                            <option value="2024-25">2024-25</option>
+                            <option value="2025-26">2025-26</option>
+                            <option value="2026-27">2026-27</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Year</label>
+                        <select class="form-control" id="filterYear" onchange="loadGroups()">
+                            <option value="All">All</option>
+                            <option value="1">1st Year</option>
+                            <option value="2">2nd Year</option>
+                            <option value="3">3rd Year</option>
+                            <option value="4">4th Year</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Semester</label>
+                        <select class="form-control" id="filterSem" onchange="loadGroups()">
+                            <option value="All">All</option>
+                            <option value="1">Sem 1</option>
+                            <option value="2">Sem 2</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Division</label>
+                        <input type="text" class="form-control" id="filterDiv" placeholder="e.g. A" oninput="loadGroups()">
+                    </div>
+                </div>
+
+                <div class="tabs">
+                    <div class="tab active" onclick="setTab('Active')" id="tabActive">Active Groups</div>
+                    <div class="tab" onclick="setTab('Completed')" id="tabCompleted">Completed Groups</div>
+                </div>
+                
+                <div id="groupsContainer">
+                    <!-- Groups populated here -->
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="db.js"></script>
+    <script src="mentor.js"></script>
+</body>
+</html>
