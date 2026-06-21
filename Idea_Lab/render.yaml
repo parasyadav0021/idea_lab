@@ -1,5 +1,0 @@
-services:
-  - type: web
-    name: idea-lab
-    env: docker
-    plan: free
