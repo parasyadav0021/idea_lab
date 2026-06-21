@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Dashboard - Idea Lab</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .dashboard-layout {
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .sidebar {
+            width: 250px;
+            background-color: var(--surface);
+            padding: 2rem 1.5rem;
+            border-right: 1px solid var(--border);
+            height: 100vh;
+            overflow-y: auto;
+        }
+
+        .main-content {
+            flex: 1;
+            padding: 2rem 3rem;
+            background: radial-gradient(circle at top right, rgba(79, 70, 229, 0.05), transparent 40%);
+            height: 100vh;
+            overflow-y: auto;
+        }
+
+        .nav-item {
+            display: block;
+            padding: 0.75rem 1rem;
+            color: var(--text-muted);
+            text-decoration: none;
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+
+        .nav-item:hover, .nav-item.active {
+            background-color: rgba(79, 70, 229, 0.1);
+            color: var(--primary);
+        }
+
+        .section-card {
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .members-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr 1fr auto;
+            gap: 1rem;
+            align-items: center;
+            padding: 1rem 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .members-header {
+            font-weight: 600;
+            color: var(--text-muted);
+            font-size: 0.875rem;
+        }
+
+        .component-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1.5fr auto;
+            gap: 1rem;
+            align-items: center;
+            padding: 1rem;
+            border-bottom: 1px solid var(--border);
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+        }
+
+        .search-bar {
+            margin-bottom: 1.5rem;
+            max-width: 400px;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-layout">
+        <aside class="sidebar">
+            <h2 class="text-gradient mb-8">Idea Lab</h2>
+            <nav>
+                <a class="nav-item active" onclick="showSection('group-settings')">Group Details</a>
+                <a class="nav-item" onclick="showSection('component-selection')">Component Selection</a>
+                <a class="nav-item" onclick="showSection('order-history')">Order History</a>
+            </nav>
+            <div style="position: absolute; bottom: 2rem;">
+                <button onclick="logout()" class="btn btn-outline">Logout</button>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <header class="mb-8 flex justify-between items-center">
+                <h1 id="pageTitle">Group Details</h1>
+                <div class="user-info">
+                    <span id="welcomeUser" style="color: var(--text-muted);">Welcome, Leader</span>
+                </div>
+            </header>
+
+            <!-- Group Settings Section -->
+            <section id="group-settings" class="glass-panel section-card">
+                <div class="flex justify-between items-center mb-6">
+                    <h3>Project Information</h3>
+                    <button id="editGroupBtn" class="btn btn-primary" onclick="toggleEditMode()">Edit Details</button>
+                </div>
+                
+                <form id="groupForm">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Academic Year<span class="required-star">*</span></label>
+                            <select class="form-control" id="academicYear" disabled required>
+                                <option value="2023-24">2023-24</option>
+                                <option value="2024-25">2024-25</option>
+                                <option value="2025-26">2025-26</option>
+                                <option value="2026-27">2026-27</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Year<span class="required-star">*</span></label>
+                            <select class="form-control" id="year" disabled required>
+                                <option value="1">1st Year</option>
+                                <option value="2">2nd Year</option>
+                                <option value="3">3rd Year</option>
+                                <option value="4">4th Year</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Semester<span class="required-star">*</span></label>
+                            <select class="form-control" id="sem" disabled required>
+                                <option value="1">Sem 1</option>
+                                <option value="2">Sem 2</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Branch<span class="required-star">*</span></label>
+                            <input type="text" class="form-control" id="branch" disabled required>
+                        </div>
+                        <div class="form-group">
+                            <label>Division<span class="required-star">*</span></label>
+                            <input type="text" class="form-control" id="division" disabled required>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Group Number<span class="required-star">*</span></label>
+                            <select class="form-control" id="groupName" disabled required>
+                                <option value="">Select Group Number</option>
+                                <!-- Populated dynamically -->
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Assigned Mentor</label>
+                            <select class="form-control" id="mentorId" disabled>
+                                <!-- Populated dynamically -->
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Problem Statement<span class="required-star">*</span></label>
+                        <input type="text" class="form-control" id="problemStatement" disabled required>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Description<span class="required-star">*</span></label>
+                        <textarea class="form-control" id="description" rows="3" disabled required></textarea>
+                    </div>
+
+                    <h4 class="mt-4 mb-4">Group Members (Max 5)</h4>
+                    <div class="members-grid members-header">
+                        <div>Name</div>
+                        <div>Roll No.</div>
+                        <div>Email ID</div>
+                        <div>Phone No.</div>
+                        <div>Action</div>
+                    </div>
+                    <div id="membersContainer">
+                        <!-- Members populated here -->
+                    </div>
+                    
+                    <button type="button" id="addMemberBtn" class="btn btn-outline mt-4 hidden" onclick="addMemberRow()">+ Add Member</button>
+
+                    <div class="mt-6 hidden" id="saveActions">
+                        <button type="submit" class="btn btn-primary mr-4">Save Changes</button>
+                        <button type="button" class="btn btn-outline" onclick="cancelEdit()">Cancel</button>
+                    </div>
+                </form>
+            </section>
+
+            <!-- Component Selection Section -->
+            <section id="component-selection" class="glass-panel section-card hidden">
+                <h3>Select Components</h3>
+                <p class="text-muted mb-6">Search and request components for your project.</p>
+                
+                <input type="text" id="componentSearch" class="form-control search-bar" placeholder="Search components..." oninput="filterComponents()">
+
+                <div class="component-grid members-header">
+                    <div>Component Name</div>
+                    <div>Total Qty</div>
+                    <div>Available</div>
+                    <div>Request Qty</div>
+                    <div>Action</div>
+                </div>
+                <div id="componentsList">
+                    <!-- Components populated here -->
+                </div>
+            </section>
+
+            <!-- Order History Section -->
+            <section id="order-history" class="glass-panel section-card hidden">
+                <h3>Request History</h3>
+                <p class="text-muted mb-6">Manage your component requests.</p>
+                
+                <div class="table-container">
+                    <table id="historyTable">
+                        <thead>
+                            <tr>
+                                <th>Component Name</th>
+                                <th>Requested Qty</th>
+                                <th>Date & Time</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historyBody">
+                            <!-- History populated here -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <script src="db.js"></script>
+    <script src="student.js"></script>
+</body>
+</html>
