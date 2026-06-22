@@ -20,11 +20,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         loginError.classList.add('hidden');
         
         try {
-            const results = await fetchQuery("SELECT * FROM users WHERE username = ? AND password = ?", [username, password]);
+            const result = await callAPI('login', { username, password });
             
-            if (results.length > 0) {
-                const user = results[0];
-                // Store user session in LocalStorage
+            if (result.data) {
+                const user = result.data;
+                // Store user session in LocalStorage for UI purposes
                 localStorage.setItem('currentUser', JSON.stringify(user));
                 
                 // Redirect based on role
@@ -36,7 +36,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     window.location.href = 'admin.html';
                 }
             } else {
-                loginError.textContent = "Invalid username or password";
+                loginError.textContent = result.error || "Invalid username or password";
                 loginError.classList.remove('hidden');
             }
         } catch (err) {

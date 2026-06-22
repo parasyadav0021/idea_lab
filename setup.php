@@ -1,5 +1,12 @@
 <?php
+$dbDir = '/var/data';
 $dbFile = __DIR__ . '/database.sqlite';
+
+if (is_dir($dbDir)) {
+    if (is_writable($dbDir)) {
+        $dbFile = $dbDir . '/database.sqlite';
+    }
+}
 
 try {
     $pdo = new PDO('sqlite:' . $dbFile);

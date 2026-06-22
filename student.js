@@ -2,6 +2,7 @@
 
 let currentUser = null;
 let currentGroupId = null;
+let groupInfoSaved = false;
 
 document.addEventListener('DOMContentLoaded', async () => {
     // Check authentication
@@ -29,12 +30,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 });
 
-function logout() {
+async function logout() {
+    try {
+        await callAPI('logout');
+    } catch (e) {
+        console.error("Logout request failed:", e);
+    }
     localStorage.removeItem('currentUser');
     window.location.href = 'index.html';
 }
 
 function showSection(sectionId) {
+    if (sectionId !== 'group-settings' && !groupInfoSaved) {
+        alert("Please complete and save your Project Information details first.");
+        return;
+    }
+    
     document.querySelectorAll('.section-card').forEach(el => el.classList.add('hidden'));
     document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
     
@@ -51,32 +62,25 @@ function showSection(sectionId) {
     }
 }
 
+let allMentors = [];
+
 async function initializeData() {
     await loadMentors();
     await loadGroupDetails();
 }
 
 async function loadMentors() {
-    const mentors = await fetchQuery("SELECT * FROM users WHERE role = 'mentor'");
-    const mentorSelect = document.getElementById('mentorId');
-    mentorSelect.innerHTML = '<option value="">Select a Mentor</option>';
-    mentors.forEach(m => {
-        mentorSelect.innerHTML += `<option value="${m.id}">${m.username}</option>`;
-    });
+    const result = await callAPI('get_mentors');
+    allMentors = result.data || [];
 }
 
 async function loadGroupDetails() {
-    // Find if the user is already a leader of a group
-    let groups = await fetchQuery("SELECT * FROM project_groups WHERE leader_id = ?", [currentUser.id]);
-    
-    if (groups.length === 0) {
-        // Create an empty group for this leader
-        await runQuery("INSERT INTO project_groups (leader_id) VALUES (?)", [currentUser.id]);
-        groups = await fetchQuery("SELECT * FROM project_groups WHERE leader_id = ?", [currentUser.id]);
-    }
-    
-    const group = groups[0];
+    const result = await callAPI('get_group_details');
+    if (result.error) return;
+
+    const group = result.data.group;
     currentGroupId = group.id;
+    groupInfoSaved = !!(group.group_name && group.branch && group.division && group.problem_statement);
 
     document.getElementById('academicYear').value = group.academic_year || '2025-26';
     document.getElementById('year').value = group.year || '1';
@@ -93,27 +97,25 @@ async function loadGroupDetails() {
     }
     groupNameSelect.value = group.group_name || '';
     
-    document.getElementById('mentorId').value = group.mentor_id || '';
+    // Display assigned mentor name (read-only, assigned by admin)
+    const assignedMentor = allMentors.find(m => m.id == group.mentor_id);
+    document.getElementById('mentorName').value = assignedMentor ? assignedMentor.username : 'Not yet assigned';
     document.getElementById('problemStatement').value = group.problem_statement || '';
     document.getElementById('description').value = group.description || '';
 
     // Load members
-    await loadMembers();
-
-    // Enable edit mode automatically if it's the first time (no group name)
-    if (!group.group_name) {
-        toggleEditMode(true);
-    }
-}
-
-async function loadMembers() {
-    const members = await fetchQuery("SELECT * FROM students WHERE group_id = ?", [currentGroupId]);
+    const members = result.data.members || [];
     const container = document.getElementById('membersContainer');
     container.innerHTML = '';
     
     members.forEach(member => {
         container.innerHTML += createMemberRowHTML(member);
     });
+
+    // Enable edit mode automatically if it's the first time (no group name)
+    if (!group.group_name) {
+        toggleEditMode(true);
+    }
 }
 
 function createMemberRowHTML(member, isEditing = false) {
@@ -132,7 +134,7 @@ function createMemberRowHTML(member, isEditing = false) {
 function toggleEditMode(forceState) {
     const isEditing = forceState !== undefined ? forceState : document.getElementById('year').disabled;
     
-    const controls = document.querySelectorAll('#groupForm .form-control');
+    const controls = document.querySelectorAll('#groupForm .form-control:not(#mentorId)');
     controls.forEach(c => c.disabled = !isEditing);
 
     const memberInputs = document.querySelectorAll('.member-row input');
@@ -182,33 +184,37 @@ async function saveGroupDetails() {
     const branch = document.getElementById('branch').value;
     const division = document.getElementById('division').value;
     const groupName = document.getElementById('groupName').value;
-    const mentorId = document.getElementById('mentorId').value;
     const problemStatement = document.getElementById('problemStatement').value;
     const description = document.getElementById('description').value;
 
-    await runQuery(`
-        UPDATE project_groups 
-        SET academic_year=?, year=?, sem=?, branch=?, division=?, group_name=?, mentor_id=?, problem_statement=?, description=?
-        WHERE id=?
-    `, [academicYear, year, sem, branch, division, groupName, mentorId, problemStatement, description, currentGroupId]);
-
-    // Save Members (Delete old and insert new for simplicity)
-    await runQuery("DELETE FROM students WHERE group_id = ?", [currentGroupId]);
-    
+    const members = [];
     const rows = document.querySelectorAll('.member-row');
     for (const row of rows) {
         const name = row.querySelector('.mem-name').value;
         const roll = row.querySelector('.mem-roll').value;
         const email = row.querySelector('.mem-email').value;
         const phone = row.querySelector('.mem-phone').value;
-        
-        await runQuery(`
-            INSERT INTO students (group_id, name, roll_no, email, phone) 
-            VALUES (?, ?, ?, ?, ?)
-        `, [currentGroupId, name, roll, email, phone]);
+        members.push({ name, roll_no: roll, email, phone });
     }
 
-    alert('Group details saved successfully!');
+    const result = await callAPI('save_group_details', {
+        academic_year: academicYear,
+        year: year,
+        sem: sem,
+        branch: branch,
+        division: division,
+        group_name: groupName,
+        problem_statement: problemStatement,
+        description: description,
+        members: members
+    });
+
+    if (result.success) {
+        alert('Group details saved successfully!');
+    } else {
+        alert('Failed to save group details: ' + (result.error || 'Unknown error'));
+    }
+    
     await loadGroupDetails(); // Refresh
 }
 
@@ -216,7 +222,8 @@ async function saveGroupDetails() {
 let allComponents = [];
 
 async function loadComponents() {
-    allComponents = await fetchQuery("SELECT * FROM components");
+    const result = await callAPI('get_components');
+    allComponents = result.data || [];
     renderComponents(allComponents);
 }
 
@@ -264,44 +271,30 @@ async function requestComponent(compId) {
         return;
     }
 
-    // Check availability again
-    const compData = await fetchQuery("SELECT available_qty FROM components WHERE id = ?", [compId]);
-    if (compData.length === 0 || compData[0].available_qty < qty) {
-        alert("Requested quantity not available.");
-        return;
+    const result = await callAPI('request_component', {
+        component_id: compId,
+        qty: qty
+    });
+
+    if (result.success) {
+        alert("Component requested successfully!");
+    } else {
+        alert("Failed to request component: " + (result.error || "Unknown error"));
     }
-
-    // Insert request
-    const requestTime = new Date().toLocaleString();
-    await runQuery(`
-        INSERT INTO component_requests (group_id, component_id, requested_qty, status, request_time)
-        VALUES (?, ?, ?, 'Pending', ?)
-    `, [currentGroupId, compId, qty, requestTime]);
-
-    // Update component availability
-    await runQuery(`
-        UPDATE components SET available_qty = available_qty - ? WHERE id = ?
-    `, [qty, compId]);
-
-    alert("Component requested successfully!");
+    
     loadComponents(); // Refresh list
 }
 
 // === Order History Logic ===
 async function loadOrderHistory() {
-    const requests = await fetchQuery(`
-        SELECT r.id, c.name as component_name, r.requested_qty, r.status, r.component_id, r.request_time
-        FROM component_requests r
-        JOIN components c ON r.component_id = c.id
-        WHERE r.group_id = ?
-        ORDER BY r.id ASC
-    `, [currentGroupId]);
+    const result = await callAPI('get_order_history');
+    const requests = result.data || [];
 
     const tbody = document.getElementById('historyBody');
     tbody.innerHTML = '';
 
     if (requests.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No requests found.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No requests found.</td></tr>';
         return;
     }
 
@@ -331,14 +324,15 @@ async function loadOrderHistory() {
 async function cancelRequest(requestId, compId, qty) {
     if (!confirm("Are you sure you want to cancel this request?")) return;
 
-    // Delete request
-    await runQuery("DELETE FROM component_requests WHERE id = ?", [requestId]);
-    
-    // Restore component availability
-    await runQuery(`
-        UPDATE components SET available_qty = available_qty + ? WHERE id = ?
-    `, [qty, compId]);
+    const result = await callAPI('cancel_request', {
+        request_id: requestId
+    });
 
-    alert("Request cancelled.");
+    if (result.success) {
+        alert("Request cancelled.");
+    } else {
+        alert("Failed to cancel request: " + (result.error || "Unknown error"));
+    }
+    
     loadOrderHistory(); // Refresh history
 }

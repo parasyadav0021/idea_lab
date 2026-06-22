@@ -208,3 +208,371 @@ tbody tr:hover {
     color: var(--danger);
     margin-left: 4px;
 }
+
+/* ==========================================================================
+   DASHBOARD LAYOUT SYSTEM
+   ========================================================================== */
+
+.dashboard-layout {
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+}
+
+.sidebar {
+    width: 250px;
+    background-color: var(--surface);
+    padding: 2rem 1.5rem;
+    border-right: 1px solid var(--border);
+    height: 100vh;
+    overflow-y: auto;
+    position: relative;
+}
+
+.main-content {
+    flex: 1;
+    padding: 2rem 3rem;
+    background: radial-gradient(circle at top right, rgba(79, 70, 229, 0.05), transparent 40%);
+    height: 100vh;
+    overflow-y: auto;
+}
+
+.nav-item {
+    display: block;
+    padding: 0.75rem 1rem;
+    color: var(--text-muted);
+    text-decoration: none;
+    border-radius: 8px;
+    margin-bottom: 0.5rem;
+    transition: all 0.2s;
+    cursor: pointer;
+}
+
+.nav-item:hover, .nav-item.active {
+    background-color: rgba(79, 70, 229, 0.1);
+    color: var(--primary);
+}
+
+.section-card {
+    padding: 2rem;
+    margin-bottom: 2rem;
+}
+
+/* Grids & Rows */
+.form-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem;
+}
+
+.filter-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.members-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr auto;
+    gap: 1rem;
+    align-items: center;
+    padding: 1rem 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.members-header {
+    font-weight: 600;
+    color: var(--text-muted);
+    font-size: 0.875rem;
+}
+
+.component-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1.5fr auto;
+    gap: 1rem;
+    align-items: center;
+    padding: 1rem;
+    border-bottom: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 8px;
+    margin-bottom: 0.5rem;
+}
+
+.comp-header {
+    font-weight: 600;
+    color: var(--text-muted);
+    background: transparent;
+    border: none;
+}
+
+.search-bar {
+    margin-bottom: 1.5rem;
+    max-width: 400px;
+}
+
+/* Cards & Lists */
+.group-card {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    overflow: hidden;
+}
+
+.group-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    cursor: pointer;
+    background: rgba(255, 255, 255, 0.01);
+    transition: background 0.2s;
+}
+
+.group-header:hover {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.group-details {
+    padding: 1.5rem;
+    border-top: 1px solid var(--border);
+    display: none;
+}
+
+.group-details.open {
+    display: block;
+}
+
+.student-list {
+    margin-top: 0.5rem;
+    display: grid;
+    grid-template-columns: 1.5fr 1fr 1.5fr 1fr;
+    gap: 1rem;
+    font-size: 0.9rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.student-list-header {
+    font-weight: 600;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border);
+}
+
+/* Tabs */
+.tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 1.5rem;
+}
+
+.tab {
+    padding: 0.75rem 1.5rem;
+    cursor: pointer;
+    color: var(--text-muted);
+    border-bottom: 2px solid transparent;
+}
+
+.tab.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+    font-weight: 600;
+}
+
+/* ==========================================================================
+   RESPONSIVE DESIGN (MOBILE & PC)
+   ========================================================================== */
+
+@media (max-width: 768px) {
+    .dashboard-layout {
+        flex-direction: column;
+        height: auto;
+        min-height: 100vh;
+        overflow: visible;
+    }
+
+    .sidebar {
+        width: 100%;
+        height: auto;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+        padding: 1.25rem 1rem;
+        overflow: visible;
+    }
+
+    .sidebar h2 {
+        text-align: center;
+        margin-bottom: 1rem !important;
+    }
+
+    .sidebar nav {
+        display: flex;
+        flex-direction: row;
+        gap: 0.5rem;
+        overflow-x: auto;
+        white-space: nowrap;
+        padding-bottom: 0.5rem;
+        margin-bottom: 0.5rem;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .nav-item {
+        margin-bottom: 0 !important;
+        display: inline-block;
+        padding: 0.5rem 0.75rem;
+        font-size: 0.85rem;
+    }
+
+    /* Position logout button nicely at bottom of mobile nav or layout */
+    .sidebar > div[style*="position: absolute;"] {
+        position: static !important;
+        width: 100%;
+        display: flex;
+        justify-content: center;
+        margin-top: 0.5rem;
+    }
+
+    .sidebar .btn-outline {
+        width: 100%;
+        max-width: 250px;
+    }
+
+    .main-content {
+        padding: 1.5rem 1rem;
+        height: auto;
+        overflow-y: visible;
+    }
+
+    header.mb-8 {
+        flex-direction: column;
+        align-items: flex-start !important;
+        gap: 0.75rem;
+        margin-bottom: 1.5rem !important;
+    }
+
+    header.mb-8 h1 {
+        font-size: 1.75rem;
+    }
+
+    .form-row, .filter-row {
+        grid-template-columns: 1fr !important;
+        gap: 1rem;
+    }
+
+    /* Card/List layout replacements for flat grids on mobile */
+    .members-grid, .component-grid, .student-list {
+        grid-template-columns: 1fr !important;
+        gap: 0.75rem !important;
+        padding: 1rem !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 12px !important;
+        margin-bottom: 1rem !important;
+        background: rgba(255, 255, 255, 0.02) !important;
+    }
+
+    .members-grid > div, .component-grid > div, .student-list > div {
+        display: flex;
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+        width: 100%;
+        text-align: right;
+    }
+
+    .members-grid input, .component-grid input, .student-list input {
+        width: 100% !important;
+        max-width: 160px !important;
+        text-align: left;
+    }
+
+    .members-grid button, .component-grid button {
+        width: 100%;
+        margin-top: 0.25rem;
+    }
+
+    /* Hide table column headers on mobile */
+    .members-header, .comp-header, .student-list-header {
+        display: none !important;
+    }
+
+    /* Card-field labels using CSS pseudo prepends */
+    .members-grid > div::before, .component-grid > div::before, .student-list > div::before {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        font-weight: 600;
+        text-align: left;
+        margin-right: 0.5rem;
+    }
+
+    /* Labels for Student Member Grid (inputs have placeholders, but we add quick labels) */
+    .members-grid > div:nth-child(1)::before { content: "Name"; }
+    .members-grid > div:nth-child(2)::before { content: "Roll No"; }
+    .members-grid > div:nth-child(3)::before { content: "Email"; }
+    .members-grid > div:nth-child(4)::before { content: "Phone"; }
+    .members-grid > div:nth-child(5)::before { content: "Action"; }
+
+    /* Labels for Student Component Selection list */
+    #componentsList .component-grid > div:nth-child(1)::before { content: "Component"; }
+    #componentsList .component-grid > div:nth-child(2)::before { content: "Total Stock"; }
+    #componentsList .component-grid > div:nth-child(3)::before { content: "Available"; }
+    #componentsList .component-grid > div:nth-child(4)::before { content: "Order Qty"; }
+    #componentsList .component-grid > div:nth-child(5)::before { content: "Action"; }
+
+    /* Labels for student lists in Mentor/Admin views */
+    .student-list > div:nth-child(1)::before { content: "Student Name"; }
+    .student-list > div:nth-child(2)::before { content: "Roll Number"; }
+    .student-list > div:nth-child(3)::before { content: "Email Address"; }
+    .student-list > div:nth-child(4)::before { content: "Phone Number"; }
+
+    /* Labels for Component Requests in Mentor/Admin group card details */
+    .group-details .component-grid > div:nth-child(1)::before { content: "Component"; }
+    .group-details .component-grid > div:nth-child(2)::before { content: "Total Qty"; }
+    .group-details .component-grid > div:nth-child(3)::before { content: "Available"; }
+    .group-details .component-grid > div:nth-child(4)::before { content: "Requested"; }
+    .group-details .component-grid > div:nth-child(5)::before { content: "Req. Time"; }
+    .group-details .component-grid > div:nth-child(6)::before { content: "Action"; }
+
+    /* Adjust labels for Admin Returns tab (which only displays 4 columns: Name, Qty, Time, Action) */
+    #students-directory-section .group-details .component-grid[style*="2fr 1fr 1fr 1.5fr"] > div:nth-child(1)::before { content: "Component"; }
+    #students-directory-section .group-details .component-grid[style*="2fr 1fr 1fr 1.5fr"] > div:nth-child(2)::before { content: "Requested"; }
+    #students-directory-section .group-details .component-grid[style*="2fr 1fr 1fr 1.5fr"] > div:nth-child(3)::before { content: "Req. Time"; }
+    #students-directory-section .group-details .component-grid[style*="2fr 1fr 1fr 1.5fr"] > div:nth-child(4)::before { content: "Action"; }
+
+    .tabs {
+        flex-wrap: wrap;
+    }
+
+    .tab {
+        flex: 1;
+        min-width: 120px;
+        text-align: center;
+        padding: 0.6rem 0.5rem;
+        font-size: 0.85rem;
+    }
+
+    .group-header {
+        flex-direction: column;
+        align-items: flex-start !important;
+        gap: 0.5rem;
+        padding: 1rem;
+    }
+
+    .search-bar {
+        max-width: 100%;
+    }
+}
+
+@media (max-width: 480px) {
+    .login-card {
+        padding: 1.5rem 1.25rem !important;
+        margin: 1rem;
+        max-width: 100%;
+    }
+    
+    .login-header {
+        margin-bottom: 1.5rem !important;
+    }
+}
+

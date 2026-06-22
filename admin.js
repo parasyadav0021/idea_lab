@@ -24,7 +24,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadAdminComponents();
 });
 
-function logout() {
+async function logout() {
+    try {
+        await callAPI('logout');
+    } catch (e) {
+        console.error("Logout request failed:", e);
+    }
     localStorage.removeItem('currentUser');
     window.location.href = 'index.html';
 }
@@ -84,67 +89,21 @@ async function loadGroups() {
     const yearSelect = document.getElementById('filterAcademicYear').value;
     const yearLvlSelect = document.getElementById('filterYear').value;
     const semSelect = document.getElementById('filterSem').value;
-    const divInput = document.getElementById('filterDiv').value.trim().toLowerCase();
+    const divInput = document.getElementById('filterDiv').value.trim();
     
     const container = document.getElementById('groupsContainer');
     container.innerHTML = '<p class="text-muted text-center">Loading...</p>';
 
-    // We fetch groups that are either 'Approved' (for Active tab) or 'Given' (for Return tab)
-    let dbStatus = currentTab === 'Active' ? 'Approved' : 'Given';
+    const result = await callAPI('admin_get_groups', {
+        tab: currentTab,
+        academic_year: yearSelect,
+        year: yearLvlSelect,
+        sem: semSelect,
+        division: divInput
+    });
+
+    const validGroups = result.data || [];
     
-    let sql = "SELECT * FROM project_groups WHERE status = ?";
-    let params = [dbStatus];
-
-    if (yearSelect !== 'All') {
-        sql += " AND academic_year = ?";
-        params.push(yearSelect);
-    }
-    if (yearLvlSelect !== 'All') {
-        sql += " AND year = ?";
-        params.push(yearLvlSelect);
-    }
-    if (semSelect !== 'All') {
-        sql += " AND sem = ?";
-        params.push(semSelect);
-    }
-    if (divInput) {
-        sql += " AND LOWER(division) = ?";
-        params.push(divInput);
-    }
-
-    sql += " ORDER BY id DESC";
-
-    const allGroups = await fetchQuery(sql, params);
-    
-    if (allGroups.length === 0) {
-        container.innerHTML = `<p class="text-muted text-center mt-4">No ${currentTab.toLowerCase()} groups found matching the criteria.</p>`;
-        return;
-    }
-
-    let validGroups = [];
-
-    // Filter Active Groups based on component status
-    if (currentTab === 'Active') {
-        for (let group of allGroups) {
-            const requests = await fetchQuery("SELECT status FROM component_requests WHERE group_id = ?", [group.id]);
-            // Exclude groups with no components
-            if (requests.length === 0) continue;
-            
-            // Exclude groups that still have 'Pending' components
-            const hasPending = requests.some(r => r.status === 'Pending');
-            if (hasPending) continue;
-
-            // Optional: Exclude groups that only have Rejected components
-            const hasApproved = requests.some(r => r.status === 'Approved');
-            if (!hasApproved) continue;
-
-            validGroups.push(group);
-        }
-    } else {
-        // Return tab: display all completed groups
-        validGroups = allGroups;
-    }
-
     if (validGroups.length === 0) {
         container.innerHTML = `<p class="text-muted text-center mt-4">No groups ready for administration matching the criteria.</p>`;
         return;
@@ -156,7 +115,7 @@ async function loadGroups() {
         let group = validGroups[i];
         
         // Fetch students
-        const students = await fetchQuery("SELECT * FROM students WHERE group_id = ?", [group.id]);
+        const students = group.students || [];
         let studentsHtml = '';
         if (students.length > 0) {
             studentsHtml += `
@@ -182,14 +141,7 @@ async function loadGroups() {
         }
 
         // Fetch component requests
-        const requests = await fetchQuery(`
-            SELECT r.*, c.name as component_name, c.total_qty, c.available_qty
-            FROM component_requests r
-            JOIN components c ON r.component_id = c.id
-            WHERE r.group_id = ?
-            ORDER BY r.status ASC, r.id ASC
-        `, [group.id]); 
-        // Note: Ordering by status ASC will put 'Approved' before 'Rejected'.
+        const requests = group.requests || []; 
 
         let componentsHtml = '';
         if (requests.length > 0) {
@@ -235,7 +187,6 @@ async function loadGroups() {
                     `;
                 } else {
                     // Return Tab rendering
-                    // Only show components that were 'Approved' (or 'Given')
                     if (req.status !== 'Approved') return;
 
                     let actionHtml = '';
@@ -301,9 +252,6 @@ async function saveAdminComponents(event, groupId) {
     const form = event.target;
     const formData = new FormData(form);
     
-    // First, fetch all requests for this group to reset checkboxes that were unchecked
-    const requests = await fetchQuery("SELECT id FROM component_requests WHERE group_id = ? AND status = 'Approved'", [groupId]);
-    
     const checkedIds = [];
     for (let [key, value] of formData.entries()) {
         if (key.startsWith('comp_given_')) {
@@ -311,23 +259,19 @@ async function saveAdminComponents(event, groupId) {
         }
     }
 
-    let allGiven = true;
-    // Update database
-    for (let req of requests) {
-        if (checkedIds.includes(req.id)) {
-            await runQuery("UPDATE component_requests SET admin_status = 'Given' WHERE id = ?", [req.id]);
-        } else {
-            allGiven = false;
-            // Only unset if it hasn't been 'Returned' already
-            await runQuery("UPDATE component_requests SET admin_status = NULL WHERE id = ? AND admin_status != 'Returned'", [req.id]);
-        }
-    }
+    const result = await callAPI('admin_save_given_components', {
+        group_id: groupId,
+        checked_request_ids: checkedIds
+    });
 
-    if (allGiven && requests.length > 0) {
-        await runQuery("UPDATE project_groups SET status = 'Given' WHERE id = ?", [groupId]);
-        alert("All components given! Group moved to Return section.");
+    if (result.success) {
+        if (result.all_given) {
+            alert("All components given! Group moved to Return section.");
+        } else {
+            alert("Saved successfully!");
+        }
     } else {
-        alert("Saved successfully!");
+        alert("Failed to save components: " + (result.error || "Unknown error"));
     }
     
     loadGroups();
@@ -336,42 +280,44 @@ async function saveAdminComponents(event, groupId) {
 async function returnComponent(reqId, compId, qty) {
     if (!confirm("Confirm component returned?")) return;
     
-    // Mark as Returned
-    await runQuery("UPDATE component_requests SET admin_status = 'Returned' WHERE id = ?", [reqId]);
-    
-    // Add quantity back to inventory
-    await runQuery("UPDATE components SET available_qty = available_qty + ? WHERE id = ?", [qty, compId]);
-    
-    loadGroups(); // Refresh
+    const result = await callAPI('admin_return_component', {
+        request_id: reqId,
+        component_id: compId,
+        requested_qty: qty
+    });
+
+    if (result.success) {
+        loadGroups();
+    } else {
+        alert("Failed to process component return: " + (result.error || "Unknown error"));
+    }
 }
 
 async function rejectAdminRequest(reqId, compId, requestedQty) {
     if (!confirm('Reject this component request?')) return;
-    // Update status to Rejected
-    await runQuery("UPDATE component_requests SET status = 'Rejected' WHERE id = ?", [reqId]);
-    // Restock component
-    await runQuery("UPDATE components SET available_qty = available_qty + ? WHERE id = ?", [requestedQty, compId]);
-    loadGroups(); // Refresh
+    
+    const result = await callAPI('admin_reject_request', {
+        request_id: reqId,
+        component_id: compId,
+        requested_qty: requestedQty
+    });
+
+    if (result.success) {
+        loadGroups();
+    } else {
+        alert("Failed to reject request: " + (result.error || "Unknown error"));
+    }
 }
-
-
 
 // --- Components Section Logic ---
 
 async function loadAdminComponents() {
-    const searchStr = document.getElementById('adminComponentSearch').value.trim().toLowerCase();
+    const searchStr = document.getElementById('adminComponentSearch').value.trim();
     const tbody = document.getElementById('componentsBody');
     tbody.innerHTML = '<tr><td colspan="4" class="text-center">Loading...</td></tr>';
 
-    let sql = "SELECT * FROM components";
-    let params = [];
-    if (searchStr) {
-        sql += " WHERE LOWER(name) LIKE ?";
-        params.push('%' + searchStr + '%');
-    }
-    sql += " ORDER BY name ASC";
-
-    const comps = await fetchQuery(sql, params);
+    const result = await callAPI('admin_get_components', { search: searchStr });
+    const comps = result.data || [];
     
     tbody.innerHTML = '';
     if (comps.length === 0) {
@@ -416,9 +362,13 @@ async function saveNewComponent() {
         return;
     }
 
-    await runQuery("INSERT INTO components (name, total_qty, available_qty) VALUES (?, ?, ?)", [name, qty, qty]);
-    hideAddComponentModal();
-    loadAdminComponents();
+    const result = await callAPI('admin_add_component', { name, qty });
+    if (result.success) {
+        hideAddComponentModal();
+        loadAdminComponents();
+    } else {
+        alert("Failed to add component: " + (result.error || "Unknown error"));
+    }
 }
 
 function enableEditQty(compId) {
@@ -437,17 +387,12 @@ async function saveEditQty(compId, oldTotal, currentAvail) {
         return;
     }
 
-    // Calculate difference and adjust available_qty
-    const diff = newTotal - oldTotal;
-    const newAvail = currentAvail + diff;
-
-    if (newAvail < 0) {
-        alert("Cannot reduce total quantity below what is currently distributed.");
-        return;
+    const result = await callAPI('admin_edit_component_qty', { id: compId, new_total: newTotal });
+    if (result.success) {
+        loadAdminComponents();
+    } else {
+        alert("Failed to update quantity: " + (result.error || "Unknown error"));
     }
-
-    await runQuery("UPDATE components SET total_qty = ?, available_qty = ? WHERE id = ?", [newTotal, newAvail, compId]);
-    loadAdminComponents();
 }
 
 // --- Edit Section Logic ---
@@ -472,20 +417,12 @@ async function saveNewUser() {
         return;
     }
 
-    try {
-        const existing = await fetchQuery("SELECT * FROM users WHERE username = ?", [name]);
-        if (existing.length > 0) {
-            alert("Username already exists.");
-            return;
-        }
-
-        await runQuery("INSERT INTO users (username, password, role) VALUES (?, ?, ?)", [name, pass, role]);
-        
+    const result = await callAPI('admin_add_user', { username: name, password: pass, role });
+    if (result.success) {
         hideAddUserModal();
         loadUsersList();
-    } catch(e) {
-        console.error(e);
-        alert("Error creating user.");
+    } else {
+        alert("Failed to save user: " + (result.error || "Username already exists"));
     }
 }
 
@@ -505,16 +442,23 @@ async function saveEditUser(id) {
         return;
     }
 
-    await runQuery("UPDATE users SET password = ? WHERE id = ?", [newPass, id]);
-    loadUsersList();
+    const result = await callAPI('admin_edit_user_password', { id, password: newPass });
+    if (result.success) {
+        loadUsersList();
+    } else {
+        alert("Failed to update password: " + (result.error || "Unknown error"));
+    }
 }
 
 async function deleteUser(id, role, username) {
     if (!confirm(`Are you sure you want to delete the user '${username}'?`)) return;
     
-    await runQuery("DELETE FROM users WHERE id = ?", [id]);
-    
-    loadUsersList();
+    const result = await callAPI('admin_delete_user', { id });
+    if (result.success) {
+        loadUsersList();
+    } else {
+        alert("Failed to delete user: " + (result.error || "Unknown error"));
+    }
 }
 
 async function loadUsersList() {
@@ -524,8 +468,11 @@ async function loadUsersList() {
     mentorsBody.innerHTML = '<tr><td colspan="3" class="text-center">Loading...</td></tr>';
     studentsBody.innerHTML = '<tr><td colspan="3" class="text-center">Loading...</td></tr>';
 
-    const mentors = await fetchQuery("SELECT id, username, password, role FROM users WHERE role = 'mentor' ORDER BY username ASC");
-    const students = await fetchQuery("SELECT id, username, password, role FROM users WHERE role = 'student' ORDER BY username ASC");
+    const result = await callAPI('admin_get_users');
+    if (result.error) return;
+
+    const mentors = result.data.mentors || [];
+    const students = result.data.students || [];
 
     mentorsBody.innerHTML = '';
     if (mentors.length === 0) {
@@ -576,13 +523,8 @@ async function loadEditGroupsList() {
     const tbody = document.getElementById('editGroupsBody');
     tbody.innerHTML = '<tr><td colspan="5" class="text-center">Loading...</td></tr>';
     
-    // Fetch all groups with their leader's username
-    const groups = await fetchQuery(`
-        SELECT g.id, g.group_name, g.status, u.username as leader_username 
-        FROM project_groups g 
-        LEFT JOIN users u ON g.leader_id = u.id 
-        ORDER BY g.id DESC
-    `);
+    const result = await callAPI('admin_get_edit_groups');
+    const groups = result.data || [];
     
     tbody.innerHTML = '';
     if (groups.length === 0) {
@@ -608,34 +550,14 @@ async function loadEditGroupsList() {
 async function deleteGroup(groupId) {
     if (!confirm("Are you SURE you want to completely delete this group? All associated students, component requests, and data will be lost. This cannot be undone.")) return;
 
-    try {
-        // 1. Fetch component requests to return inventory
-        const requests = await fetchQuery("SELECT * FROM component_requests WHERE group_id = ?", [groupId]);
-        for (let req of requests) {
-            // If request was not rejected and not returned, the components are still deducted
-            if (req.status !== 'Rejected' && req.admin_status !== 'Returned') {
-                await runQuery("UPDATE components SET available_qty = available_qty + ? WHERE id = ?", [req.requested_qty, req.component_id]);
-            }
-        }
-        
-        // 2. Delete component requests
-        await runQuery("DELETE FROM component_requests WHERE group_id = ?", [groupId]);
-        
-        // 3. Delete students
-        await runQuery("DELETE FROM students WHERE group_id = ?", [groupId]);
-        
-        // 4. Delete the group
-        await runQuery("DELETE FROM project_groups WHERE id = ?", [groupId]);
-        
+    const result = await callAPI('admin_delete_group', { group_id: groupId });
+    if (result.success) {
         loadEditGroupsList();
-        
-        // Refresh groups in memory/DOM if necessary
         if (!document.getElementById('students-directory-section').classList.contains('hidden')) {
             loadGroups();
         }
-    } catch(e) {
-        console.error(e);
-        alert("Error deleting group.");
+    } else {
+        alert("Failed to delete group: " + (result.error || "Unknown error"));
     }
 }
 
@@ -643,8 +565,8 @@ async function deleteGroup(groupId) {
 let currentFilteredGroupsForAssignment = [];
 
 async function loadAssigneeSection() {
-    // Load mentors into the dropdown from users table
-    const mentors = await fetchQuery("SELECT * FROM users WHERE role = 'mentor' ORDER BY username ASC");
+    const result = await callAPI('get_mentors');
+    const mentors = result.data || [];
     const select = document.getElementById('assignMentorSelect');
     select.innerHTML = '<option value="">-- Choose Mentor --</option>';
     mentors.forEach(m => {
@@ -657,19 +579,16 @@ async function previewAssignGroups() {
     const yearSelect = document.getElementById('assignAcademicYear').value;
     const yearLvlSelect = document.getElementById('assignYear').value;
     const semSelect = document.getElementById('assignSem').value;
-    const divInput = document.getElementById('assignDiv').value.trim().toLowerCase();
+    const divInput = document.getElementById('assignDiv').value.trim();
     
-    let sql = "SELECT * FROM project_groups WHERE 1=1";
-    let params = [];
-
-    if (yearSelect !== 'All') { sql += " AND academic_year = ?"; params.push(yearSelect); }
-    if (yearLvlSelect !== 'All') { sql += " AND year = ?"; params.push(yearLvlSelect); }
-    if (semSelect !== 'All') { sql += " AND sem = ?"; params.push(semSelect); }
-    if (divInput) { sql += " AND LOWER(division) = ?"; params.push(divInput); }
-
-    sql += " ORDER BY id ASC"; 
-
-    currentFilteredGroupsForAssignment = await fetchQuery(sql, params);
+    const result = await callAPI('admin_preview_assign_groups', {
+        academic_year: yearSelect,
+        year: yearLvlSelect,
+        sem: semSelect,
+        division: divInput
+    });
+    
+    currentFilteredGroupsForAssignment = result.data || [];
     
     const preview = document.getElementById('assignGroupsPreview');
     if (currentFilteredGroupsForAssignment.length === 0) {
@@ -704,26 +623,30 @@ async function applyBatchAssignment() {
         return;
     }
 
-    let assignedCount = 0;
-    // Arrays are 0-indexed, but UI is 1-indexed (1 to N)
-    for (let i = fromIdx - 1; i < toIdx; i++) {
-        if (i >= 0 && i < currentFilteredGroupsForAssignment.length) {
-            const group = currentFilteredGroupsForAssignment[i];
-            await runQuery("UPDATE project_groups SET mentor_id = ? WHERE id = ?", [mentorId, group.id]);
-            assignedCount++;
+    const yearSelect = document.getElementById('assignAcademicYear').value;
+    const yearLvlSelect = document.getElementById('assignYear').value;
+    const semSelect = document.getElementById('assignSem').value;
+    const divInput = document.getElementById('assignDiv').value.trim();
+
+    const result = await callAPI('admin_apply_batch_assignment', {
+        from_idx: fromIdx,
+        to_idx: toIdx,
+        mentor_id: mentorId,
+        academic_year: yearSelect,
+        year: yearLvlSelect,
+        sem: semSelect,
+        division: divInput
+    });
+
+    if (result.success) {
+        alert(`Successfully assigned mentor to ${result.assigned_count} groups!`);
+        document.getElementById('assignFrom').value = '';
+        document.getElementById('assignTo').value = '';
+        if (!document.getElementById('students-directory-section').classList.contains('hidden')) {
+            loadGroups();
         }
+        loadEditGroupsList();
+    } else {
+        alert("Failed to execute batch assignment: " + (result.error || "Unknown error"));
     }
-
-    alert(`Successfully assigned mentor to ${assignedCount} groups!`);
-    
-    document.getElementById('assignFrom').value = '';
-    document.getElementById('assignTo').value = '';
-    
-    // Refresh group view if necessary
-    if (!document.getElementById('students-directory-section').classList.contains('hidden')) {
-        loadGroups();
-    }
-    loadEditGroupsList();
 }
-
-

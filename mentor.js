@@ -24,7 +24,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadGroups();
 });
 
-function logout() {
+async function logout() {
+    try {
+        await callAPI('logout');
+    } catch (e) {
+        console.error("Logout request failed:", e);
+    }
     localStorage.removeItem('currentUser');
     window.location.href = 'index.html';
 }
@@ -51,54 +56,20 @@ async function loadGroups() {
     const yearSelect = document.getElementById('filterAcademicYear').value;
     const yearLvlSelect = document.getElementById('filterYear').value;
     const semSelect = document.getElementById('filterSem').value;
-    const divInput = document.getElementById('filterDiv').value.trim().toLowerCase();
+    const divInput = document.getElementById('filterDiv').value.trim();
     
     const container = document.getElementById('groupsContainer');
     container.innerHTML = '<p class="text-muted text-center">Loading...</p>';
 
-    let sql = "SELECT * FROM project_groups";
-    let params = [];
-    let conditions = [];
+    const result = await callAPI('mentor_get_groups', {
+        tab: currentTab,
+        academic_year: yearSelect,
+        year: yearLvlSelect,
+        sem: semSelect,
+        division: divInput
+    });
 
-    // Filter by tab status
-    if (currentTab === 'Active') {
-        conditions.push("status = ?");
-        params.push('Active');
-    } else {
-        conditions.push("status != ?");
-        params.push('Active');
-    }
-
-    // Filter by assigned mentor
-    if (currentUser.role === 'mentor') {
-        conditions.push("mentor_id = ?");
-        params.push(currentUser.id);
-    }
-
-    if (yearSelect !== 'All') {
-        conditions.push("academic_year = ?");
-        params.push(yearSelect);
-    }
-    if (yearLvlSelect !== 'All') {
-        conditions.push("year = ?");
-        params.push(yearLvlSelect);
-    }
-    if (semSelect !== 'All') {
-        conditions.push("sem = ?");
-        params.push(semSelect);
-    }
-    if (divInput) {
-        conditions.push("LOWER(division) = ?");
-        params.push(divInput);
-    }
-
-    if (conditions.length > 0) {
-        sql += " WHERE " + conditions.join(" AND ");
-    }
-    
-    sql += " ORDER BY id DESC";
-
-    const groups = await fetchQuery(sql, params);
+    const groups = result.data || [];
     
     if (groups.length === 0) {
         container.innerHTML = `<p class="text-muted text-center mt-4">No ${currentTab.toLowerCase()} groups found matching the criteria.</p>`;
@@ -111,7 +82,7 @@ async function loadGroups() {
         let group = groups[i];
         
         // Fetch students
-        const students = await fetchQuery("SELECT * FROM students WHERE group_id = ?", [group.id]);
+        const students = group.students || [];
         let studentsHtml = '';
         if (students.length > 0) {
             studentsHtml += `
@@ -137,13 +108,7 @@ async function loadGroups() {
         }
 
         // Fetch component requests
-        const requests = await fetchQuery(`
-            SELECT r.*, c.name as component_name, c.total_qty, c.available_qty
-            FROM component_requests r
-            JOIN components c ON r.component_id = c.id
-            WHERE r.group_id = ?
-            ORDER BY r.id ASC
-        `, [group.id]);
+        const requests = group.requests || [];
         
         let componentsHtml = '';
         if (requests.length > 0) {
@@ -216,21 +181,34 @@ async function loadGroups() {
 
 async function approveRequest(reqId) {
     if (!confirm('Approve this component request?')) return;
-    await runQuery("UPDATE component_requests SET status = 'Approved' WHERE id = ?", [reqId]);
-    loadGroups(); // Refresh
+    const result = await callAPI('mentor_approve_request', { request_id: reqId });
+    if (result.success) {
+        loadGroups();
+    } else {
+        alert("Failed to approve request: " + (result.error || "Unknown error"));
+    }
 }
 
 async function rejectRequest(reqId, compId, requestedQty) {
     if (!confirm('Reject this component request?')) return;
-    // Update status
-    await runQuery("UPDATE component_requests SET status = 'Rejected' WHERE id = ?", [reqId]);
-    // Restock component
-    await runQuery("UPDATE components SET available_qty = available_qty + ? WHERE id = ?", [requestedQty, compId]);
-    loadGroups(); // Refresh
+    const result = await callAPI('mentor_reject_request', {
+        request_id: reqId,
+        component_id: compId,
+        requested_qty: requestedQty
+    });
+    if (result.success) {
+        loadGroups();
+    } else {
+        alert("Failed to reject request: " + (result.error || "Unknown error"));
+    }
 }
 
 async function approveGroup(groupId) {
     if (!confirm('Are you sure you want to approve this group? It will be moved to the Completed section and sent to the Admin for component distribution.')) return;
-    await runQuery("UPDATE project_groups SET status = 'Approved' WHERE id = ?", [groupId]);
-    loadGroups(); // Refresh list to move it out
+    const result = await callAPI('mentor_approve_group', { group_id: groupId });
+    if (result.success) {
+        loadGroups();
+    } else {
+        alert("Failed to approve group: " + (result.error || "Unknown error"));
+    }
 }
