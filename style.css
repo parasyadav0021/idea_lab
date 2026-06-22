@@ -473,8 +473,8 @@ tbody tr:hover {
 
     .main-content {
         padding: 1.5rem 1rem;
-        height: auto;
-        overflow-y: visible;
+        height: 100vh;
+        overflow-y: auto;
     }
 
     header.mb-8 {
