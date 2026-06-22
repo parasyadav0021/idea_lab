@@ -41,9 +41,9 @@ async function logout() {
 }
 
 function showSection(sectionId) {
-    if (sectionId !== 'group-settings' && !groupInfoSaved) {
-        alert("Please complete and save your Project Information details first.");
-        return;
+    // Allow navigation but show a warning if trying to request
+    if (sectionId === 'component-selection' && !groupInfoSaved) {
+        document.getElementById('componentsList').innerHTML = '<p class="text-muted text-center mt-4" style="color: var(--danger);">Please complete and save your Project Information details first before requesting components.</p>';
     }
     
     document.querySelectorAll('.section-card').forEach(el => el.classList.add('hidden'));
@@ -59,6 +59,11 @@ function showSection(sectionId) {
         loadComponents();
     } else if (sectionId === 'order-history') {
         loadOrderHistory();
+    }
+
+    // Close mobile sidebar if open
+    if (window.innerWidth <= 768 && document.getElementById('sidebar').classList.contains('open')) {
+        toggleSidebar();
     }
 }
 
@@ -252,9 +257,12 @@ function renderComponents(components) {
                     <input type="number" id="qty-${comp.id}" class="form-control" min="1" max="${comp.available_qty}" value="1" style="width: 80px;" ${comp.available_qty === 0 ? 'disabled' : ''}>
                 </div>
                 <div>
-                    ${comp.available_qty > 0 ? 
-                        `<button class="btn btn-primary" onclick="requestComponent(${comp.id})">Request</button>` : 
-                        `<button class="btn btn-outline" disabled>Out of Stock</button>`
+                    ${!groupInfoSaved ? 
+                        `<button class="btn btn-outline" disabled title="Fill group details first" style="opacity:0.5;">Request</button>` :
+                        (comp.available_qty > 0 ? 
+                            `<button class="btn btn-primary" onclick="requestComponent(${comp.id})">Request</button>` : 
+                            `<button class="btn btn-outline" disabled>Out of Stock</button>`
+                        )
                     }
                 </div>
             </div>

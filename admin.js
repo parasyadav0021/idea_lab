@@ -65,6 +65,11 @@ function showAdminSection(sectionId) {
         loadEditGroupsList();
         loadAssigneeSection();
     }
+
+    // Close mobile sidebar if open
+    if (window.innerWidth <= 768 && document.getElementById('sidebar').classList.contains('open')) {
+        toggleSidebar();
+    }
 }
 
 function setTab(tabName) {

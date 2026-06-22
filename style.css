@@ -237,6 +237,14 @@ tbody tr:hover {
     overflow-y: auto;
 }
 
+.mobile-menu-btn {
+    display: none;
+}
+
+.sidebar-overlay {
+    display: none;
+}
+
 .nav-item {
     display: block;
     padding: 0.75rem 1rem;
@@ -387,50 +395,75 @@ tbody tr:hover {
 @media (max-width: 768px) {
     .dashboard-layout {
         flex-direction: column;
-        height: auto;
-        min-height: 100vh;
-        overflow: visible;
+        height: 100vh;
+        overflow: hidden;
     }
 
     .sidebar {
-        width: 100%;
-        height: auto;
-        border-right: none;
-        border-bottom: 1px solid var(--border);
-        padding: 1.25rem 1rem;
-        overflow: visible;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 250px;
+        height: 100vh;
+        background-color: var(--surface);
+        z-index: 1000;
+        transform: translateX(-100%);
+        transition: transform 0.3s ease-in-out;
+        border-right: 1px solid var(--border);
+        padding: 2rem 1.5rem;
+        overflow-y: auto;
+    }
+
+    .sidebar.open {
+        transform: translateX(0);
     }
 
     .sidebar h2 {
-        text-align: center;
-        margin-bottom: 1rem !important;
+        text-align: left;
+        margin-bottom: 2rem !important;
     }
 
     .sidebar nav {
-        display: flex;
-        flex-direction: row;
-        gap: 0.5rem;
-        overflow-x: auto;
-        white-space: nowrap;
-        padding-bottom: 0.5rem;
-        margin-bottom: 0.5rem;
-        -webkit-overflow-scrolling: touch;
+        display: block;
+        margin-bottom: 2rem;
     }
 
     .nav-item {
-        margin-bottom: 0 !important;
-        display: inline-block;
-        padding: 0.5rem 0.75rem;
-        font-size: 0.85rem;
+        display: block;
+        margin-bottom: 0.5rem !important;
+        padding: 0.75rem 1rem;
+        font-size: 1rem;
     }
 
-    /* Position logout button nicely at bottom of mobile nav or layout */
+    .sidebar-overlay.open {
+        display: block;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 999;
+    }
+
+    .mobile-menu-btn {
+        display: block;
+        background: none;
+        border: none;
+        color: var(--text-main);
+        font-size: 1.5rem;
+        cursor: pointer;
+        padding: 0.25rem;
+    }
+
+    /* Position logout button */
     .sidebar > div[style*="position: absolute;"] {
-        position: static !important;
+        position: relative !important;
         width: 100%;
         display: flex;
         justify-content: center;
-        margin-top: 0.5rem;
+        margin-top: 2rem;
+        bottom: auto !important;
     }
 
     .sidebar .btn-outline {
@@ -445,9 +478,9 @@ tbody tr:hover {
     }
 
     header.mb-8 {
-        flex-direction: column;
-        align-items: flex-start !important;
-        gap: 0.75rem;
+        flex-direction: row;
+        align-items: center !important;
+        gap: 1rem;
         margin-bottom: 1.5rem !important;
     }
 
@@ -566,13 +599,17 @@ tbody tr:hover {
 
 @media (max-width: 480px) {
     .login-card {
-        padding: 1.5rem 1.25rem !important;
+        padding: 2.5rem 1.5rem !important;
         margin: 1rem;
         max-width: 100%;
     }
     
     .login-header {
-        margin-bottom: 1.5rem !important;
+        margin-bottom: 2.5rem !important;
+    }
+    
+    .form-group {
+        margin-bottom: 1.5rem;
     }
 }
 
