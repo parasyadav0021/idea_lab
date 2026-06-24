@@ -120,6 +120,11 @@ async function loadGroupDetails() {
     // Enable edit mode automatically if it's the first time (no group name)
     if (!group.group_name) {
         toggleEditMode(true);
+        const cancelBtn = document.getElementById('cancelBtn');
+        if (cancelBtn) cancelBtn.style.display = 'none';
+    } else {
+        const cancelBtn = document.getElementById('cancelBtn');
+        if (cancelBtn) cancelBtn.style.display = 'inline-block';
     }
 }
 
@@ -179,7 +184,7 @@ function addMemberRow() {
         showToast("Maximum 5 members allowed.", "error");
         return;
     }
-    container.innerHTML += createMemberRowHTML({}, true);
+    container.insertAdjacentHTML('beforeend', createMemberRowHTML({}, true));
 }
 
 async function saveGroupDetails() {
@@ -450,7 +455,7 @@ async function downloadSlip() {
         <div style="display: flex; justify-content: space-between; margin-top: 80px;">
             <div style="text-align: center;">
                 <p>_______________________</p>
-                <p>Project Guide Signature</p>
+                <p>Student Signature</p>
             </div>
             <div style="text-align: center;">
                 <p>_______________________</p>

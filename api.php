@@ -35,11 +35,19 @@ if (is_dir($dbDir)) {
 }
 
 // Start secure session
+date_default_timezone_set('Asia/Kolkata');
 session_start();
 
 try {
     $pdo = new PDO('sqlite:' . $dbFile);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+    // Auto-migrate new timestamp columns (silently fail if they exist)
+    try {
+        $pdo->exec("ALTER TABLE component_requests ADD COLUMN approval_time TEXT");
+        $pdo->exec("ALTER TABLE component_requests ADD COLUMN issue_time TEXT");
+        $pdo->exec("ALTER TABLE component_requests ADD COLUMN return_time TEXT");
+    } catch (Exception $e) {}
 
     // Read action payload
     $inputJSON = file_get_contents('php://input');
@@ -237,6 +245,11 @@ try {
 
             if (!$group) {
                 echo json_encode(['error' => 'No active student group found']);
+                exit;
+            }
+
+            if ($group['status'] !== 'Active') {
+                echo json_encode(['error' => 'Your group is already approved. Cannot request more components.']);
                 exit;
             }
 
@@ -439,8 +452,9 @@ try {
                 }
             }
 
-            $stmt = $pdo->prepare("UPDATE component_requests SET status = 'Approved' WHERE id = ?");
-            $stmt->execute([$reqId]);
+            $time = date('Y-m-d H:i:s');
+            $stmt = $pdo->prepare("UPDATE component_requests SET status = 'Approved', approval_time = ? WHERE id = ?");
+            $stmt->execute([$time, $reqId]);
             echo json_encode(['success' => true]);
             break;
 
@@ -463,13 +477,61 @@ try {
                 }
             }
 
-            // Update status to Rejected
-            $stmt = $pdo->prepare("UPDATE component_requests SET status = 'Rejected' WHERE id = ?");
+            $stmt = $pdo->prepare("SELECT status FROM component_requests WHERE id = ?");
             $stmt->execute([$reqId]);
+            $currentStatus = $stmt->fetchColumn();
 
-            // Restock component
-            $stmt = $pdo->prepare("UPDATE components SET available_qty = available_qty + ? WHERE id = ?");
-            $stmt->execute([$qty, $compId]);
+            if ($currentStatus !== 'Rejected') {
+                // Update status to Rejected
+                $stmt = $pdo->prepare("UPDATE component_requests SET status = 'Rejected' WHERE id = ?");
+                $stmt->execute([$reqId]);
+
+                // Restock component
+                $stmt = $pdo->prepare("UPDATE components SET available_qty = available_qty + ? WHERE id = ?");
+                $stmt->execute([$qty, $compId]);
+            }
+
+            echo json_encode(['success' => true]);
+            break;
+
+        case 'mentor_revert_request':
+            checkRole(['mentor', 'admin']);
+            $reqId = $params['request_id'];
+            $compId = $params['component_id'];
+            $qty = intval($params['requested_qty']);
+            $currentStatus = $params['current_status'];
+
+            if ($_SESSION['role'] === 'mentor') {
+                $stmt = $pdo->prepare("
+                    SELECT r.id FROM component_requests r
+                    JOIN project_groups g ON r.group_id = g.id
+                    WHERE r.id = ? AND g.mentor_id = ?
+                ");
+                $stmt->execute([$reqId, $_SESSION['user_id']]);
+                if (!$stmt->fetchColumn()) {
+                    echo json_encode(['error' => 'Permission denied']);
+                    exit;
+                }
+            }
+
+            // If it was rejected, the qty was restocked. If reverted, we must deduct it back!
+            if ($currentStatus === 'Rejected') {
+                $stmt = $pdo->prepare("SELECT available_qty FROM components WHERE id = ?");
+                $stmt->execute([$compId]);
+                $avail = $stmt->fetchColumn();
+
+                if ($avail !== false && $avail < $qty) {
+                    echo json_encode(['error' => 'Not enough inventory available to revert this rejection. Please check stock.']);
+                    exit;
+                }
+
+                $stmt = $pdo->prepare("UPDATE components SET available_qty = available_qty - ? WHERE id = ?");
+                $stmt->execute([$qty, $compId]);
+            }
+
+            // Update status to Pending
+            $stmt = $pdo->prepare("UPDATE component_requests SET status = 'Pending' WHERE id = ?");
+            $stmt->execute([$reqId]);
 
             echo json_encode(['success' => true]);
             break;
@@ -485,6 +547,13 @@ try {
                     echo json_encode(['error' => 'Permission denied']);
                     exit;
                 }
+            }
+
+            $stmt = $pdo->prepare("SELECT COUNT(*) FROM component_requests WHERE group_id = ? AND status = 'Pending'");
+            $stmt->execute([$groupId]);
+            if ($stmt->fetchColumn() > 0) {
+                echo json_encode(['error' => 'Cannot approve group with pending requests']);
+                exit;
             }
 
             $stmt = $pdo->prepare("UPDATE project_groups SET status = 'Approved' WHERE id = ?");
@@ -586,11 +655,12 @@ try {
             $approvedRequests = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
             $allGiven = true;
+            $time = date('Y-m-d H:i:s');
             foreach ($approvedRequests as $req) {
                 $reqId = $req['id'];
                 if (in_array($reqId, $checkedIds)) {
-                    $stmtUpdate = $pdo->prepare("UPDATE component_requests SET admin_status = 'Given' WHERE id = ?");
-                    $stmtUpdate->execute([$reqId]);
+                    $stmtUpdate = $pdo->prepare("UPDATE component_requests SET admin_status = 'Given', issue_time = ? WHERE id = ?");
+                    $stmtUpdate->execute([$time, $reqId]);
                 } else {
                     $allGiven = false;
                     // Reset admin status to NULL if not checked, unless already marked Returned
@@ -614,9 +684,10 @@ try {
             $reqId = $params['request_id'];
             $compId = $params['component_id'];
             $qty = intval($params['requested_qty']);
+            $time = date('Y-m-d H:i:s');
 
-            $stmt = $pdo->prepare("UPDATE component_requests SET admin_status = 'Returned' WHERE id = ?");
-            $stmt->execute([$reqId]);
+            $stmt = $pdo->prepare("UPDATE component_requests SET admin_status = 'Returned', return_time = ? WHERE id = ?");
+            $stmt->execute([$time, $reqId]);
 
             // Add quantity back to inventory
             $stmt = $pdo->prepare("UPDATE components SET available_qty = available_qty + ? WHERE id = ?");
@@ -648,12 +719,50 @@ try {
             $compId = $params['component_id'];
             $qty = intval($params['requested_qty']);
 
-            $stmt = $pdo->prepare("UPDATE component_requests SET status = 'Rejected' WHERE id = ?");
+            $stmt = $pdo->prepare("SELECT status FROM component_requests WHERE id = ?");
             $stmt->execute([$reqId]);
+            $currentStatus = $stmt->fetchColumn();
 
-            // Restock component
-            $stmt = $pdo->prepare("UPDATE components SET available_qty = available_qty + ? WHERE id = ?");
-            $stmt->execute([$qty, $compId]);
+            if ($currentStatus !== 'Rejected') {
+                $stmt = $pdo->prepare("UPDATE component_requests SET status = 'Rejected' WHERE id = ?");
+                $stmt->execute([$reqId]);
+
+                // Restock component
+                $stmt = $pdo->prepare("UPDATE components SET available_qty = available_qty + ? WHERE id = ?");
+                $stmt->execute([$qty, $compId]);
+            }
+
+            echo json_encode(['success' => true]);
+            break;
+
+        case 'admin_revert_request':
+            checkRole(['admin']);
+            $reqId = $params['request_id'];
+            $compId = $params['component_id'];
+            $qty = intval($params['requested_qty']);
+
+            $stmt = $pdo->prepare("SELECT status FROM component_requests WHERE id = ?");
+            $stmt->execute([$reqId]);
+            $currentStatus = $stmt->fetchColumn();
+
+            if ($currentStatus === 'Rejected') {
+                // Check availability before reverting
+                $stmt = $pdo->prepare("SELECT available_qty FROM components WHERE id = ?");
+                $stmt->execute([$compId]);
+                $avail = $stmt->fetchColumn();
+
+                if ($avail !== false && $avail < $qty) {
+                    echo json_encode(['error' => 'Not enough inventory available to revert this rejection. Please check stock.']);
+                    exit;
+                }
+
+                // Deduct component from inventory again
+                $stmt = $pdo->prepare("UPDATE components SET available_qty = available_qty - ? WHERE id = ?");
+                $stmt->execute([$qty, $compId]);
+            }
+
+            $stmt = $pdo->prepare("UPDATE component_requests SET status = 'Approved' WHERE id = ?");
+            $stmt->execute([$reqId]);
 
             echo json_encode(['success' => true]);
             break;
@@ -952,6 +1061,20 @@ try {
                 $csvData[] = ['Group ID', 'Group Name', 'Academic Year', 'Year', 'Sem', 'Division', 'Mentor', 'Status'];
                 foreach ($rows as $row) {
                     $csvData[] = [$row['id'], $row['group_name'], $row['academic_year'], $row['year'], $row['sem'], $row['division'], $row['mentor'], $row['status']];
+                }
+            } else if ($type === 'requests') {
+                $stmt = $pdo->prepare("
+                    SELECT cr.id, g.group_name, c.name as component, cr.requested_qty, cr.status, cr.request_time, cr.approval_time, cr.issue_time, cr.return_time 
+                    FROM component_requests cr
+                    JOIN project_groups g ON cr.group_id = g.id
+                    JOIN components c ON cr.component_id = c.id
+                    ORDER BY cr.id DESC
+                ");
+                $stmt->execute();
+                $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                $csvData[] = ['Request ID', 'Group Name', 'Component Name', 'Requested Qty', 'Status', 'Requisition Time', 'Approval Time', 'Issuance Time', 'Return Time'];
+                foreach ($rows as $row) {
+                    $csvData[] = [$row['id'], $row['group_name'], $row['component'], $row['requested_qty'], $row['status'], $row['request_time'], $row['approval_time'], $row['issue_time'], $row['return_time']];
                 }
             } else {
                 echo json_encode(['error' => 'Invalid export type']);

@@ -97,7 +97,9 @@
                     <div class="tab active" onclick="setTab('Active')" id="tabActive">Active Groups</div>
                     <div class="tab" onclick="setTab('Return')" id="tabReturn">Pending Return Groups</div>
                     <div class="tab" onclick="setTab('Returned')" id="tabReturned">Component Returned Groups</div>
-                    <button class="btn btn-outline ml-auto" style="margin-left: auto; align-self: center;" onclick="exportData('projects')">Export CSV</button>
+                    <div style="margin-left: auto; display: flex; gap: 0.5rem; align-items: center;">
+                        <button class="btn btn-outline" onclick="exportData('requests')">Export Requests CSV</button>
+                    </div>
                 </div>
                 
                 <div id="groupsContainer">
@@ -304,7 +306,7 @@
         </main>
     </div>
 
-    <script src="db.js"></script>
-    <script src="admin.js"></script>
+    <script src="db.js?v=2"></script>
+    <script src="admin.js?v=2"></script>
 </body>
 </html>

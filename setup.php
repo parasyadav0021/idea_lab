@@ -34,7 +34,7 @@ try {
             description TEXT,
             status TEXT DEFAULT 'Active',
             FOREIGN KEY(leader_id) REFERENCES users(id),
-            FOREIGN KEY(mentor_id) REFERENCES mentors(id)
+            FOREIGN KEY(mentor_id) REFERENCES users(id)
         );
 
         CREATE TABLE IF NOT EXISTS students (
@@ -61,6 +61,9 @@ try {
             requested_qty INTEGER,
             status TEXT,
             request_time TEXT,
+            approval_time TEXT,
+            issue_time TEXT,
+            return_time TEXT,
             admin_status TEXT,
             FOREIGN KEY(group_id) REFERENCES project_groups(id),
             FOREIGN KEY(component_id) REFERENCES components(id)

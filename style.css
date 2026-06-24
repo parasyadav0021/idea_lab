@@ -559,19 +559,27 @@ tbody tr:hover {
     .student-list > div:nth-child(3)::before { content: "Email Address"; }
     .student-list > div:nth-child(4)::before { content: "Phone Number"; }
 
-    /* Labels for Component Requests in Mentor/Admin group card details */
-    .group-details .component-grid > div:nth-child(1)::before { content: "Component"; }
-    .group-details .component-grid > div:nth-child(2)::before { content: "Total Qty"; }
-    .group-details .component-grid > div:nth-child(3)::before { content: "Available"; }
-    .group-details .component-grid > div:nth-child(4)::before { content: "Requested"; }
-    .group-details .component-grid > div:nth-child(5)::before { content: "Req. Time"; }
-    .group-details .component-grid > div:nth-child(6)::before { content: "Action"; }
+    /* 1. Mentor Layout (0.5fr 2fr 1fr 1fr 1fr 1.5fr) */
+    .group-details .component-grid[style*="0.5fr 2fr 1fr 1fr 1fr 1.5fr"] > div:nth-child(1)::before { content: ""; }
+    .group-details .component-grid[style*="0.5fr 2fr 1fr 1fr 1fr 1.5fr"] > div:nth-child(2)::before { content: "Component"; }
+    .group-details .component-grid[style*="0.5fr 2fr 1fr 1fr 1fr 1.5fr"] > div:nth-child(3)::before { content: "Total Qty"; }
+    .group-details .component-grid[style*="0.5fr 2fr 1fr 1fr 1fr 1.5fr"] > div:nth-child(4)::before { content: "Available"; }
+    .group-details .component-grid[style*="0.5fr 2fr 1fr 1fr 1fr 1.5fr"] > div:nth-child(5)::before { content: "Requested"; }
+    .group-details .component-grid[style*="0.5fr 2fr 1fr 1fr 1fr 1.5fr"] > div:nth-child(6)::before { content: "Action"; }
 
-    /* Adjust labels for Admin Returns tab (which only displays 4 columns: Name, Qty, Time, Action) */
-    #students-directory-section .group-details .component-grid[style*="2fr 1fr 1fr 1.5fr"] > div:nth-child(1)::before { content: "Component"; }
-    #students-directory-section .group-details .component-grid[style*="2fr 1fr 1fr 1.5fr"] > div:nth-child(2)::before { content: "Requested"; }
-    #students-directory-section .group-details .component-grid[style*="2fr 1fr 1fr 1.5fr"] > div:nth-child(3)::before { content: "Req. Time"; }
-    #students-directory-section .group-details .component-grid[style*="2fr 1fr 1fr 1.5fr"] > div:nth-child(4)::before { content: "Action"; }
+    /* 2. Admin Active Layout (0.5fr 0.5fr 2fr 1fr 1fr 1fr) */
+    .group-details .component-grid[style*="0.5fr 0.5fr 2fr 1fr 1fr 1fr"] > div:nth-child(1)::before { content: ""; }
+    .group-details .component-grid[style*="0.5fr 0.5fr 2fr 1fr 1fr 1fr"] > div:nth-child(2)::before { content: "Given"; }
+    .group-details .component-grid[style*="0.5fr 0.5fr 2fr 1fr 1fr 1fr"] > div:nth-child(3)::before { content: "Component"; }
+    .group-details .component-grid[style*="0.5fr 0.5fr 2fr 1fr 1fr 1fr"] > div:nth-child(4)::before { content: "Requested"; }
+    .group-details .component-grid[style*="0.5fr 0.5fr 2fr 1fr 1fr 1fr"] > div:nth-child(5)::before { content: "Status"; }
+    .group-details .component-grid[style*="0.5fr 0.5fr 2fr 1fr 1fr 1fr"] > div:nth-child(6)::before { content: "Action"; }
+
+    /* 3. Admin Return/Returned Layout (0.5fr 2fr 1fr 1.5fr) */
+    .group-details .component-grid[style*="0.5fr 2fr 1fr 1.5fr"] > div:nth-child(1)::before { content: ""; }
+    .group-details .component-grid[style*="0.5fr 2fr 1fr 1.5fr"] > div:nth-child(2)::before { content: "Component"; }
+    .group-details .component-grid[style*="0.5fr 2fr 1fr 1.5fr"] > div:nth-child(3)::before { content: "Requested"; }
+    .group-details .component-grid[style*="0.5fr 2fr 1fr 1.5fr"] > div:nth-child(4)::before { content: "Action"; }
 
     .tabs {
         flex-wrap: wrap;
@@ -595,6 +603,60 @@ tbody tr:hover {
     .search-bar {
         max-width: 100%;
     }
+}
+
+/* ==========================================================================
+   TIMESTAMP ACCORDION
+   ========================================================================== */
+
+.chevron-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0.25rem 0.5rem;
+    font-size: 1rem;
+    transition: transform 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.chevron-btn:hover {
+    color: var(--primary);
+}
+
+.chevron-btn.open {
+    transform: rotate(180deg);
+}
+
+.timestamp-details {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease-out, padding 0.3s ease-out, opacity 0.3s ease-out;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 8px;
+    margin: 0 1rem;
+    opacity: 0;
+}
+
+.timestamp-details.open {
+    max-height: 200px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    border: 1px solid var(--border);
+    opacity: 1;
+}
+
+.timestamp-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.25rem 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.timestamp-row:last-child {
+    border-bottom: none;
 }
 
 @media (max-width: 480px) {

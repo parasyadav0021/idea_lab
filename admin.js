@@ -2,6 +2,7 @@
 
 let currentUser = null;
 let currentTab = 'Active';
+let currentAdminOpenGroupId = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
     // Check authentication
@@ -118,10 +119,12 @@ function toggleGroupDetails(groupId) {
     const detailsDiv = document.getElementById(`group-details-${groupId}`);
     if (detailsDiv.classList.contains('open')) {
         detailsDiv.classList.remove('open');
+        currentAdminOpenGroupId = null;
     } else {
         // Close others
         document.querySelectorAll('.group-details.open').forEach(el => el.classList.remove('open'));
         detailsDiv.classList.add('open');
+        currentAdminOpenGroupId = groupId;
     }
 }
 
@@ -213,11 +216,11 @@ function renderGroupsPage() {
         if (requests.length > 0) {
             componentsHtml += `
                 <h4 class="mt-6 mb-2">Requested Components</h4>
-                <div class="component-grid comp-header" style="grid-template-columns: ${currentTab === 'Active' ? '0.5fr 2fr 1fr 1fr 1fr 1fr' : '2fr 1fr 1fr 1.5fr'};">
+                <div class="component-grid comp-header" style="grid-template-columns: ${currentTab === 'Active' ? '0.5fr 0.5fr 2fr 1fr 1fr 1fr' : '0.5fr 2fr 1fr 1.5fr'};">
+                    <div></div>
                     ${currentTab === 'Active' ? '<div></div>' : ''}
                     <div>Component Name</div>
                     <div>Requested Qty</div>
-                    <div>Time</div>
                     ${currentTab === 'Active' ? '<div>Status</div><div>Action</div>' : '<div>Admin Action</div>'}
                 </div>
                 <form id="form-group-${group.id}" onsubmit="saveAdminComponents(event, ${group.id})">
@@ -238,17 +241,27 @@ function renderGroupsPage() {
                             <button type="button" class="btn btn-outline" style="padding: 0.25rem 0.75rem; font-size: 0.8rem; border-color: var(--danger); color: var(--danger);" onclick="rejectAdminRequest(${req.id}, ${req.component_id}, ${req.requested_qty})">Reject</button>
                         `;
                     } else if (req.status === 'Rejected') {
-                        actionHtml = `<span>-</span>`;
+                        actionHtml = `
+                            <span style="color: var(--danger); font-weight: 600; margin-right: 0.5rem;">Rejected</span>
+                            <button type="button" class="btn btn-outline" style="padding: 0.2rem 0.5rem; font-size: 0.7rem;" onclick="revertAdminRequest(${req.id}, ${req.component_id}, ${req.requested_qty})">Edit</button>
+                        `;
                     }
                     
                     componentsHtml += `
-                        <div class="component-grid" style="grid-template-columns: 0.5fr 2fr 1fr 1fr 1fr 1fr;">
-                            <div style="display:flex; justify-content:center; align-items:center;">${checkboxHtml}</div>
-                            <div><strong>${escapeHTML(req.component_name)}</strong></div>
-                            <div>${req.requested_qty}</div>
-                            <div>${req.request_time ? req.request_time : 'N/A'}</div>
-                            <div><span style="color: ${statusColor}; font-weight: 600;">${displayStatus}</span></div>
-                            <div>${actionHtml}</div>
+                        <div>
+                            <div class="component-grid" style="grid-template-columns: 0.5fr 0.5fr 2fr 1fr 1fr 1fr;">
+                                <div><button type="button" class="chevron-btn" onclick="toggleTimestamps(this)" title="View Timestamps">▼</button></div>
+                                <div style="display:flex; justify-content:center; align-items:center;">${checkboxHtml}</div>
+                                <div><strong>${escapeHTML(req.component_name)}</strong></div>
+                                <div>${req.requested_qty}</div>
+                                <div><span style="color: ${statusColor}; font-weight: 600;">${displayStatus}</span></div>
+                                <div>${actionHtml}</div>
+                            </div>
+                            <div class="timestamp-details">
+                                <div class="timestamp-row"><span>Requisition Timestamp:</span> <span>${req.request_time ? req.request_time : 'N/A'}</span></div>
+                                ${req.approval_time ? `<div class="timestamp-row"><span>Approval Timestamp:</span> <span>${req.approval_time}</span></div>` : ''}
+                                ${req.issue_time ? `<div class="timestamp-row"><span>Issuance Timestamp:</span> <span>${req.issue_time}</span></div>` : ''}
+                            </div>
                         </div>
                     `;
                 } else {
@@ -268,11 +281,19 @@ function renderGroupsPage() {
                     }
 
                     componentsHtml += `
-                        <div class="component-grid" style="grid-template-columns: 2fr 1fr 1fr 1.5fr;">
-                            <div><strong>${escapeHTML(req.component_name)}</strong></div>
-                            <div>${req.requested_qty}</div>
-                            <div>${req.request_time ? req.request_time : 'N/A'}</div>
-                            <div>${actionHtml}</div>
+                        <div>
+                            <div class="component-grid" style="grid-template-columns: 0.5fr 2fr 1fr 1.5fr;">
+                                <div><button type="button" class="chevron-btn" onclick="toggleTimestamps(this)" title="View Timestamps">▼</button></div>
+                                <div><strong>${escapeHTML(req.component_name)}</strong></div>
+                                <div>${req.requested_qty}</div>
+                                <div>${actionHtml}</div>
+                            </div>
+                            <div class="timestamp-details">
+                                <div class="timestamp-row"><span>Requisition Timestamp:</span> <span>${req.request_time ? req.request_time : 'N/A'}</span></div>
+                                ${req.approval_time ? `<div class="timestamp-row"><span>Approval Timestamp:</span> <span>${req.approval_time}</span></div>` : ''}
+                                ${req.issue_time ? `<div class="timestamp-row"><span>Issuance Timestamp:</span> <span>${req.issue_time}</span></div>` : ''}
+                                ${req.return_time ? `<div class="timestamp-row"><span>Return Timestamp:</span> <span>${req.return_time}</span></div>` : ''}
+                            </div>
                         </div>
                     `;
                 }
@@ -313,6 +334,13 @@ function renderGroupsPage() {
                 </div>
             </div>
         `;
+    }
+    
+    if (currentAdminOpenGroupId) {
+        const detailsDiv = document.getElementById(`group-details-${currentAdminOpenGroupId}`);
+        if (detailsDiv) {
+            detailsDiv.classList.add('open');
+        }
     }
     
     if (pagination && totalPages > 1) {
@@ -397,6 +425,23 @@ async function rejectAdminRequest(reqId, compId, requestedQty) {
     }
 }
 
+async function revertAdminRequest(reqId, compId, requestedQty) {
+    if (!confirm('Revert this request back to Approved?')) return;
+    
+    const result = await callAPI('admin_revert_request', {
+        request_id: reqId,
+        component_id: compId,
+        requested_qty: requestedQty
+    });
+
+    if (result.success) {
+        loadGroups();
+        showToast("Request reverted to Approved.", "success");
+    } else {
+        showToast("Failed to revert request: " + (result.error || "Unknown error"), "error");
+    }
+}
+
 // --- Components Section Logic ---
 
 async function loadAdminComponents() {
@@ -416,7 +461,7 @@ async function loadAdminComponents() {
     comps.forEach(c => {
         tbody.innerHTML += `
             <tr>
-                <td data-label="Component Name"><strong>${c.name}</strong></td>
+                <td data-label="Component Name"><strong>${escapeHTML(c.name)}</strong></td>
                 <td data-label="Total Quantity">
                     <span id="qty-text-${c.id}">${c.total_qty}</span>
                     <input type="number" id="qty-input-${c.id}" class="form-control hidden" style="max-width:80px; padding: 0.25rem;" value="${c.total_qty}">
@@ -439,6 +484,16 @@ function hideAddComponentModal() {
     document.getElementById('addComponentForm').classList.add('hidden');
     document.getElementById('newCompName').value = '';
     document.getElementById('newCompQty').value = '';
+}
+
+function toggleTimestamps(btn) {
+    btn.classList.toggle('open');
+    const details = btn.closest('div.component-grid').nextElementSibling;
+    if (details.classList.contains('open')) {
+        details.classList.remove('open');
+    } else {
+        details.classList.add('open');
+    }
 }
 
 async function saveNewComponent() {

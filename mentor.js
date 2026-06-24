@@ -2,6 +2,7 @@
 
 let currentUser = null;
 let currentTab = 'Active';
+let currentOpenGroupId = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
     // Check authentication
@@ -46,10 +47,12 @@ function toggleGroupDetails(groupId) {
     const detailsDiv = document.getElementById(`group-details-${groupId}`);
     if (detailsDiv.classList.contains('open')) {
         detailsDiv.classList.remove('open');
+        currentOpenGroupId = null;
     } else {
         // Close others
         document.querySelectorAll('.group-details.open').forEach(el => el.classList.remove('open'));
         detailsDiv.classList.add('open');
+        currentOpenGroupId = groupId;
     }
 }
 
@@ -115,12 +118,12 @@ async function loadGroups() {
         if (requests.length > 0) {
             componentsHtml += `
                 <h4 class="mt-6 mb-2">Requested Components</h4>
-                <div class="component-grid comp-header">
+                <div class="component-grid comp-header" style="grid-template-columns: 0.5fr 2fr 1fr 1fr 1fr 1.5fr;">
+                    <div></div>
                     <div>Component Name</div>
                     <div>Total Qty</div>
                     <div>Available</div>
                     <div>Requested Qty</div>
-                    <div>Time</div>
                     <div>Action</div>
                 </div>
             `;
@@ -133,17 +136,30 @@ async function loadGroups() {
                     `;
                 } else {
                     let color = req.status === 'Approved' ? 'var(--secondary)' : 'var(--danger)';
-                    actionHtml = `<span style="color: ${color}; font-weight: 600;">${req.status}</span>`;
+                    if (currentTab === 'Active') {
+                        actionHtml = `
+                            <span style="color: ${color}; font-weight: 600; margin-right: 0.5rem;">${req.status}</span>
+                            <button class="btn btn-outline" style="padding: 0.2rem 0.5rem; font-size: 0.7rem;" onclick="revertRequest(${req.id}, ${req.component_id}, ${req.requested_qty}, '${req.status}')">Edit</button>
+                        `;
+                    } else {
+                        actionHtml = `<span style="color: ${color}; font-weight: 600;">${req.status}</span>`;
+                    }
                 }
                 
                 componentsHtml += `
-                    <div class="component-grid">
-                        <div><strong>${escapeHTML(req.component_name)}</strong></div>
-                        <div>${req.total_qty}</div>
-                        <div>${req.available_qty}</div>
-                        <div>${req.requested_qty}</div>
-                        <div>${req.request_time ? req.request_time : 'N/A'}</div>
-                        <div>${actionHtml}</div>
+                    <div>
+                        <div class="component-grid" style="grid-template-columns: 0.5fr 2fr 1fr 1fr 1fr 1.5fr;">
+                            <div><button type="button" class="chevron-btn" onclick="toggleTimestamps(this)" title="View Timestamps">▼</button></div>
+                            <div><strong>${escapeHTML(req.component_name)}</strong></div>
+                            <div>${req.total_qty}</div>
+                            <div>${req.available_qty}</div>
+                            <div>${req.requested_qty}</div>
+                            <div>${actionHtml}</div>
+                        </div>
+                        <div class="timestamp-details">
+                            <div class="timestamp-row"><span>Requisition Timestamp:</span> <span>${req.request_time ? req.request_time : 'N/A'}</span></div>
+                            ${req.approval_time ? `<div class="timestamp-row"><span>Approval Timestamp:</span> <span>${req.approval_time}</span></div>` : ''}
+                        </div>
                     </div>
                 `;
             });
@@ -177,6 +193,13 @@ async function loadGroups() {
                 </div>
             </div>
         `;
+    }
+
+    if (currentOpenGroupId) {
+        const detailsDiv = document.getElementById(`group-details-${currentOpenGroupId}`);
+        if (detailsDiv) {
+            detailsDiv.classList.add('open');
+        }
     }
 }
 
@@ -214,5 +237,31 @@ async function approveGroup(groupId) {
         showToast("Group approved.", "success");
     } else {
         showToast("Failed to approve group: " + (result.error || "Unknown error"), "error");
+    }
+}
+
+async function revertRequest(reqId, compId, requestedQty, currentStatus) {
+    if (!confirm('Revert this request to Pending?')) return;
+    const result = await callAPI('mentor_revert_request', {
+        request_id: reqId,
+        component_id: compId,
+        requested_qty: requestedQty,
+        current_status: currentStatus
+    });
+    if (result.success) {
+        loadGroups();
+        showToast("Request reverted to Pending.", "success");
+    } else {
+        showToast("Failed to revert request: " + (result.error || "Unknown error"), "error");
+    }
+}
+
+function toggleTimestamps(btn) {
+    btn.classList.toggle('open');
+    const details = btn.closest('div.component-grid').nextElementSibling;
+    if (details.classList.contains('open')) {
+        details.classList.remove('open');
+    } else {
+        details.classList.add('open');
     }
 }
