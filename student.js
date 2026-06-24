@@ -127,10 +127,10 @@ function createMemberRowHTML(member, isEditing = false) {
     const disabled = isEditing ? '' : 'disabled';
     return `
         <div class="members-grid member-row" data-id="${member.id || ''}">
-            <input type="text" class="form-control mem-name" value="${member.name || ''}" placeholder="Name" ${disabled} required>
-            <input type="text" class="form-control mem-roll" value="${member.roll_no || ''}" placeholder="Roll No" ${disabled} required>
-            <input type="email" class="form-control mem-email" value="${member.email || ''}" placeholder="Email" ${disabled} required>
-            <input type="text" class="form-control mem-phone" value="${member.phone || ''}" placeholder="Phone" ${disabled} required>
+            <input type="text" class="form-control mem-name" value="${escapeHTML(member.name || '')}" placeholder="Name" ${disabled} required>
+            <input type="text" class="form-control mem-roll" value="${escapeHTML(member.roll_no || '')}" placeholder="Roll No" ${disabled} required>
+            <input type="email" class="form-control mem-email" value="${escapeHTML(member.email || '')}" placeholder="Email" ${disabled} required>
+            <input type="text" class="form-control mem-phone" value="${escapeHTML(member.phone || '')}" placeholder="Phone" ${disabled} required>
             ${isEditing ? `<button type="button" class="btn btn-danger" onclick="this.parentElement.remove()">Remove</button>` : '<div>-</div>'}
         </div>
     `;
@@ -176,7 +176,7 @@ function addMemberRow() {
     const container = document.getElementById('membersContainer');
     const rows = container.querySelectorAll('.member-row');
     if (rows.length >= 5) {
-        alert("Maximum 5 members allowed.");
+        showToast("Maximum 5 members allowed.", "error");
         return;
     }
     container.innerHTML += createMemberRowHTML({}, true);
@@ -215,9 +215,9 @@ async function saveGroupDetails() {
     });
 
     if (result.success) {
-        alert('Group details saved successfully!');
+        showToast('Group details saved successfully!', "success");
     } else {
-        alert('Failed to save group details: ' + (result.error || 'Unknown error'));
+        showToast('Failed to save group details: ' + (result.error || 'Unknown error'), "error");
     }
     
     await loadGroupDetails(); // Refresh
@@ -250,7 +250,7 @@ function renderComponents(components) {
     components.forEach(comp => {
         list.innerHTML += `
             <div class="component-grid">
-                <div><strong>${comp.name}</strong></div>
+                <div><strong>${escapeHTML(comp.name)}</strong></div>
                 <div>${comp.total_qty}</div>
                 <div style="color: ${comp.available_qty > 0 ? 'var(--secondary)' : 'var(--danger)'}">${comp.available_qty}</div>
                 <div>
@@ -275,7 +275,7 @@ async function requestComponent(compId) {
     const qty = parseInt(qtyInput.value);
     
     if (isNaN(qty) || qty <= 0) {
-        alert("Please enter a valid quantity.");
+        showToast("Please enter a valid quantity.", "error");
         return;
     }
 
@@ -285,9 +285,9 @@ async function requestComponent(compId) {
     });
 
     if (result.success) {
-        alert("Component requested successfully!");
+        showToast("Component requested successfully!", "success");
     } else {
-        alert("Failed to request component: " + (result.error || "Unknown error"));
+        showToast("Failed to request component: " + (result.error || "Unknown error"), "error");
     }
     
     loadComponents(); // Refresh list
@@ -314,11 +314,11 @@ async function loadOrderHistory() {
 
         tbody.innerHTML += `
             <tr>
-                <td>${req.component_name}</td>
-                <td>${req.requested_qty}</td>
-                <td>${req.request_time || '-'}</td>
-                <td style="color: ${statusColor}; font-weight: 600;">${req.status}</td>
-                <td>
+                <td data-label="Component Name">${escapeHTML(req.component_name)}</td>
+                <td data-label="Requested Qty">${req.requested_qty}</td>
+                <td data-label="Date & Time">${req.request_time || '-'}</td>
+                <td data-label="Status" style="color: ${statusColor}; font-weight: 600;">${req.status}</td>
+                <td data-label="Actions">
                     ${req.status === 'Pending' ? 
                         `<button class="btn btn-outline" onclick="cancelRequest(${req.id}, ${req.component_id}, ${req.requested_qty})">Cancel</button>` : 
                         '-'
@@ -337,10 +337,141 @@ async function cancelRequest(requestId, compId, qty) {
     });
 
     if (result.success) {
-        alert("Request cancelled.");
+        showToast("Request cancelled.", "success");
     } else {
-        alert("Failed to cancel request: " + (result.error || "Unknown error"));
+        showToast("Failed to cancel request: " + (result.error || "Unknown error"), "error");
     }
     
     loadOrderHistory(); // Refresh history
+}
+
+async function downloadSlip() {
+    showToast("Generating PDF...", "success");
+
+    // Fetch latest group details and order history to ensure we have the latest
+    const groupResult = await callAPI('get_group_details');
+    const orderResult = await callAPI('get_order_history');
+
+    if (groupResult.error || orderResult.error) {
+        showToast("Failed to fetch data for PDF.", "error");
+        return;
+    }
+
+    const group = groupResult.data.group;
+    const members = groupResult.data.members || [];
+    const requests = orderResult.data || [];
+    
+    // Filter only approved requests
+    const approvedRequests = requests.filter(r => r.status === 'Approved');
+    
+    if (approvedRequests.length === 0) {
+        showToast("No approved components to print.", "error");
+        return;
+    }
+
+    // Create a hidden div to render the PDF content
+    const printDiv = document.createElement('div');
+    printDiv.style.padding = '40px';
+    printDiv.style.fontFamily = 'Arial, sans-serif';
+    printDiv.style.color = '#000';
+    printDiv.style.background = '#fff';
+
+    let html = `
+        <div style="text-align: center; border-bottom: 2px solid #333; padding-bottom: 20px; margin-bottom: 30px;">
+            <h1 style="margin: 0; font-size: 24px;">IDEA LAB</h1>
+            <h2 style="margin: 5px 0 0 0; font-size: 18px; color: #555;">Component Requisition Slip</h2>
+        </div>
+        
+        <div style="display: flex; justify-content: space-between; margin-bottom: 30px;">
+            <div>
+                <p><strong>Group Name:</strong> ${escapeHTML(group.group_name)}</p>
+                <p><strong>Academic Year:</strong> ${escapeHTML(group.academic_year)}</p>
+                <p><strong>Branch/Div:</strong> ${escapeHTML(group.branch)} / ${escapeHTML(group.division)}</p>
+            </div>
+            <div style="text-align: right;">
+                <p><strong>Date:</strong> ${new Date().toLocaleDateString()}</p>
+                <p><strong>Mentor:</strong> ${escapeHTML(document.getElementById('mentorName').value)}</p>
+            </div>
+        </div>
+
+        <h3 style="border-bottom: 1px solid #ccc; padding-bottom: 5px;">Project Details</h3>
+        <p><strong>Statement:</strong> ${escapeHTML(group.problem_statement)}</p>
+        
+        <h3 style="border-bottom: 1px solid #ccc; padding-bottom: 5px; margin-top: 30px;">Team Members</h3>
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px;">
+            <thead>
+                <tr style="background: #f5f5f5;">
+                    <th style="border: 1px solid #ccc; padding: 8px; text-align: left;">Name</th>
+                    <th style="border: 1px solid #ccc; padding: 8px; text-align: left;">Roll No</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+    members.forEach(m => {
+        html += `
+            <tr>
+                <td style="border: 1px solid #ccc; padding: 8px;">${escapeHTML(m.name)}</td>
+                <td style="border: 1px solid #ccc; padding: 8px;">${escapeHTML(m.roll_no)}</td>
+            </tr>
+        `;
+    });
+
+    html += `
+            </tbody>
+        </table>
+
+        <h3 style="border-bottom: 1px solid #ccc; padding-bottom: 5px;">Approved Components</h3>
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 50px;">
+            <thead>
+                <tr style="background: #f5f5f5;">
+                    <th style="border: 1px solid #ccc; padding: 8px; text-align: left;">S.No</th>
+                    <th style="border: 1px solid #ccc; padding: 8px; text-align: left;">Component Name</th>
+                    <th style="border: 1px solid #ccc; padding: 8px; text-align: left;">Qty</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+    approvedRequests.forEach((req, idx) => {
+        html += `
+            <tr>
+                <td style="border: 1px solid #ccc; padding: 8px;">${idx + 1}</td>
+                <td style="border: 1px solid #ccc; padding: 8px;">${escapeHTML(req.component_name)}</td>
+                <td style="border: 1px solid #ccc; padding: 8px;">${req.requested_qty}</td>
+            </tr>
+        `;
+    });
+
+    html += `
+            </tbody>
+        </table>
+
+        <div style="display: flex; justify-content: space-between; margin-top: 80px;">
+            <div style="text-align: center;">
+                <p>_______________________</p>
+                <p>Project Guide Signature</p>
+            </div>
+            <div style="text-align: center;">
+                <p>_______________________</p>
+                <p>Lab Incharge Signature</p>
+            </div>
+        </div>
+    `;
+
+    printDiv.innerHTML = html;
+    const opt = {
+        margin:       0.5,
+        filename:     `Requisition_Slip_Group_${escapeHTML(group.group_name)}.pdf`,
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  { scale: 2 },
+        jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
+    };
+
+    html2pdf().set(opt).from(printDiv).save().then(() => {
+        showToast("PDF downloaded!", "success");
+    }).catch(err => {
+        console.error(err);
+        showToast("Error generating PDF.", "error");
+    });
 }

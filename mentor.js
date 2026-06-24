@@ -24,6 +24,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadGroups();
 });
 
+
 async function logout() {
     try {
         await callAPI('logout');
@@ -96,10 +97,10 @@ async function loadGroups() {
             students.forEach(s => {
                 studentsHtml += `
                     <div class="student-list">
-                        <div>${s.name}</div>
-                        <div>${s.roll_no}</div>
-                        <div>${s.email}</div>
-                        <div>${s.phone}</div>
+                        <div>${escapeHTML(s.name)}</div>
+                        <div>${escapeHTML(s.roll_no)}</div>
+                        <div>${escapeHTML(s.email)}</div>
+                        <div>${escapeHTML(s.phone)}</div>
                     </div>
                 `;
             });
@@ -137,7 +138,7 @@ async function loadGroups() {
                 
                 componentsHtml += `
                     <div class="component-grid">
-                        <div><strong>${req.component_name}</strong></div>
+                        <div><strong>${escapeHTML(req.component_name)}</strong></div>
                         <div>${req.total_qty}</div>
                         <div>${req.available_qty}</div>
                         <div>${req.requested_qty}</div>
@@ -151,9 +152,9 @@ async function loadGroups() {
         container.innerHTML += `
             <div class="group-card">
                 <div class="group-header" onclick="toggleGroupDetails(${group.id})">
-                    <h4 style="margin: 0;">${i + 1}- ${group.group_name || 'Unnamed Group'}</h4>
+                    <h4 style="margin: 0;">${i + 1}- ${escapeHTML(group.group_name || 'Unnamed Group')}</h4>
                     <span class="badge" style="background: rgba(79, 70, 229, 0.1); color: var(--primary); padding: 0.25rem 0.75rem; border-radius: 999px; font-size: 0.8rem;">
-                        ${group.academic_year || 'Year N/A'} | Year ${group.year || '-'}, Sem ${group.sem || '-'} | Div: ${group.division || '-'}
+                        ${escapeHTML(group.academic_year || 'Year N/A')} | Year ${escapeHTML(group.year || '-')}, Sem ${escapeHTML(group.sem || '-')} | Div: ${escapeHTML(group.division || '-')}
                     </span>
                 </div>
                 <div class="group-details" id="group-details-${group.id}">
@@ -162,8 +163,8 @@ async function loadGroups() {
                     
                     <h4 class="mt-6 mb-2">Problem Statement</h4>
                     <div style="background: rgba(255,255,255,0.02); padding: 1rem; border-radius: 8px; border: 1px solid var(--border);">
-                        <strong>${group.problem_statement || 'N/A'}</strong><br>
-                        <span class="text-muted text-sm mt-2 block">${group.description || 'No description provided.'}</span>
+                        <strong>${escapeHTML(group.problem_statement || 'N/A')}</strong><br>
+                        <span class="text-muted text-sm mt-2 block">${escapeHTML(group.description || 'No description provided.')}</span>
                     </div>
 
                     ${componentsHtml}
@@ -184,8 +185,9 @@ async function approveRequest(reqId) {
     const result = await callAPI('mentor_approve_request', { request_id: reqId });
     if (result.success) {
         loadGroups();
+        showToast("Request approved.", "success");
     } else {
-        alert("Failed to approve request: " + (result.error || "Unknown error"));
+        showToast("Failed to approve request: " + (result.error || "Unknown error"), "error");
     }
 }
 
@@ -198,8 +200,9 @@ async function rejectRequest(reqId, compId, requestedQty) {
     });
     if (result.success) {
         loadGroups();
+        showToast("Request rejected.", "success");
     } else {
-        alert("Failed to reject request: " + (result.error || "Unknown error"));
+        showToast("Failed to reject request: " + (result.error || "Unknown error"), "error");
     }
 }
 
@@ -208,7 +211,8 @@ async function approveGroup(groupId) {
     const result = await callAPI('mentor_approve_group', { group_id: groupId });
     if (result.success) {
         loadGroups();
+        showToast("Group approved.", "success");
     } else {
-        alert("Failed to approve group: " + (result.error || "Unknown error"));
+        showToast("Failed to approve group: " + (result.error || "Unknown error"), "error");
     }
 }

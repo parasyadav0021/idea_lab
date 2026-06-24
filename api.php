@@ -166,6 +166,11 @@ try {
             $description = $params['description'];
             $members = $params['members']; // array of members
 
+            if (count($members) > 5) {
+                echo json_encode(['error' => 'Maximum 5 members allowed']);
+                exit;
+            }
+
             // Retrieve group ID associated with leader
             $stmt = $pdo->prepare("SELECT id FROM project_groups WHERE leader_id = ?");
             $stmt->execute([$leaderId]);
@@ -176,13 +181,28 @@ try {
                 exit;
             }
 
-            // Update project_groups (DO NOT update mentor_id, it is restricted to admin)
-            $stmt = $pdo->prepare("
-                UPDATE project_groups 
-                SET academic_year=?, year=?, sem=?, branch=?, division=?, group_name=?, problem_statement=?, description=?
-                WHERE id=?
-            ");
-            $stmt->execute([$academicYear, $year, $sem, $branch, $division, $groupName, $problemStatement, $description, $groupId]);
+            // Check if there is an existing mentor assignment for these details
+            $stmtMentor = $pdo->prepare("SELECT mentor_id FROM mentor_assignments WHERE academic_year=? AND year=? AND sem=? AND LOWER(division)=? AND group_name=?");
+            $stmtMentor->execute([$academicYear, $year, $sem, strtolower($division), $groupName]);
+            $autoMentorId = $stmtMentor->fetchColumn();
+
+            if ($autoMentorId) {
+                // Update project_groups with the pre-assigned mentor
+                $stmt = $pdo->prepare("
+                    UPDATE project_groups 
+                    SET academic_year=?, year=?, sem=?, branch=?, division=?, group_name=?, problem_statement=?, description=?, mentor_id=?
+                    WHERE id=?
+                ");
+                $stmt->execute([$academicYear, $year, $sem, $branch, $division, $groupName, $problemStatement, $description, $autoMentorId, $groupId]);
+            } else {
+                // Update without changing mentor
+                $stmt = $pdo->prepare("
+                    UPDATE project_groups 
+                    SET academic_year=?, year=?, sem=?, branch=?, division=?, group_name=?, problem_statement=?, description=?
+                    WHERE id=?
+                ");
+                $stmt->execute([$academicYear, $year, $sem, $branch, $division, $groupName, $problemStatement, $description, $groupId]);
+            }
 
             // Save members (Delete old & Insert new)
             $stmt = $pdo->prepare("DELETE FROM students WHERE group_id = ?");
@@ -341,6 +361,9 @@ try {
                 $sqlParams[] = 'Active';
             }
 
+            $conditions[] = "group_name IS NOT NULL";
+            $conditions[] = "group_name != ''";
+
             // Mentors are restricted to their assigned groups. Admins can view all.
             if ($role === 'mentor') {
                 $conditions[] = "mentor_id = ?";
@@ -475,34 +498,36 @@ try {
         
         case 'admin_get_groups':
             checkRole(['admin']);
-            $tab = $params['tab']; // 'Active' or 'Return'
+            $tab = $params['tab']; // 'Active', 'Return', 'Returned'
             $academicYear = $params['academic_year'];
             $year = $params['year'];
             $sem = $params['sem'];
             $division = $params['division'];
 
-            $dbStatus = $tab === 'Active' ? 'Approved' : 'Given';
+            $dbStatus = 'Approved';
+            if ($tab === 'Return') $dbStatus = 'Given';
+            if ($tab === 'Returned') $dbStatus = 'Returned';
 
-            $sql = "SELECT * FROM project_groups WHERE status = ?";
+            $sql = "SELECT g.*, u.username as mentor_username FROM project_groups g LEFT JOIN users u ON g.mentor_id = u.id WHERE g.status = ? AND g.group_name IS NOT NULL AND g.group_name != ''";
             $sqlParams = [$dbStatus];
 
             if ($academicYear !== 'All') {
-                $sql .= " AND academic_year = ?";
+                $sql .= " AND g.academic_year = ?";
                 $sqlParams[] = $academicYear;
             }
             if ($year !== 'All') {
-                $sql .= " AND year = ?";
+                $sql .= " AND g.year = ?";
                 $sqlParams[] = $year;
             }
             if ($sem !== 'All') {
-                $sql .= " AND sem = ?";
+                $sql .= " AND g.sem = ?";
                 $sqlParams[] = $sem;
             }
             if (!empty($division)) {
-                $sql .= " AND LOWER(division) = ?";
+                $sql .= " AND LOWER(g.division) = ?";
                 $sqlParams[] = strtolower($division);
             }
-            $sql .= " ORDER BY id DESC";
+            $sql .= " ORDER BY g.id DESC";
 
             $stmt = $pdo->prepare($sql);
             $stmt->execute($sqlParams);
@@ -597,7 +622,24 @@ try {
             $stmt = $pdo->prepare("UPDATE components SET available_qty = available_qty + ? WHERE id = ?");
             $stmt->execute([$qty, $compId]);
 
-            echo json_encode(['success' => true]);
+            // Check if all approved components are returned for the group
+            $stmt = $pdo->prepare("SELECT group_id FROM component_requests WHERE id = ?");
+            $stmt->execute([$reqId]);
+            $groupId = $stmt->fetchColumn();
+
+            if ($groupId) {
+                $stmtCheck = $pdo->prepare("SELECT COUNT(*) FROM component_requests WHERE group_id = ? AND status = 'Approved' AND (admin_status IS NULL OR admin_status != 'Returned')");
+                $stmtCheck->execute([$groupId]);
+                if ($stmtCheck->fetchColumn() == 0) {
+                    // All components returned!
+                    $stmtUpdate = $pdo->prepare("UPDATE project_groups SET status = 'Returned' WHERE id = ?");
+                    $stmtUpdate->execute([$groupId]);
+                    echo json_encode(['success' => true, 'all_returned' => true]);
+                    exit;
+                }
+            }
+
+            echo json_encode(['success' => true, 'all_returned' => false]);
             break;
 
         case 'admin_reject_request':
@@ -753,6 +795,7 @@ try {
                 SELECT g.id, g.group_name, g.status, u.username as leader_username 
                 FROM project_groups g 
                 LEFT JOIN users u ON g.leader_id = u.id 
+                WHERE g.group_name IS NOT NULL AND g.group_name != ''
                 ORDER BY g.id DESC
             ");
             $stmt->execute();
@@ -817,36 +860,114 @@ try {
             $toIdx = intval($params['to_idx']);
             $mentorId = $params['mentor_id'];
             
-            // Re-fetch the exact filtered list to perform indexing
             $academicYear = $params['academic_year'];
             $year = $params['year'];
             $sem = $params['sem'];
             $division = $params['division'];
 
-            $sql = "SELECT id FROM project_groups WHERE 1=1";
-            $sqlParams = [];
+            if (empty($division) || $academicYear === 'All' || $year === 'All' || $sem === 'All') {
+                echo json_encode(['error' => 'You must select a specific Academic Year, Year, Semester, and Division to assign mentors.']);
+                exit;
+            }
 
-            if ($academicYear !== 'All') { $sql .= " AND academic_year = ?"; $sqlParams[] = $academicYear; }
-            if ($year !== 'All') { $sql .= " AND year = ?"; $sqlParams[] = $year; }
-            if ($sem !== 'All') { $sql .= " AND sem = ?"; $sqlParams[] = $sem; }
-            if (!empty($division)) { $sql .= " AND LOWER(division) = ?"; $sqlParams[] = strtolower($division); }
-            $sql .= " ORDER BY id ASC";
+            // Check for crosspath
+            $conflictGroups = [];
+            for ($i = $fromIdx; $i <= $toIdx; $i++) {
+                $groupNameStr = (string)$i;
+                $stmt = $pdo->prepare("SELECT mentor_id FROM mentor_assignments WHERE academic_year=? AND year=? AND sem=? AND LOWER(division)=? AND group_name=?");
+                $stmt->execute([$academicYear, $year, $sem, strtolower($division), $groupNameStr]);
+                $existingMentor = $stmt->fetchColumn();
 
-            $stmt = $pdo->prepare($sql);
-            $stmt->execute($sqlParams);
-            $groupIds = $stmt->fetchAll(PDO::FETCH_COLUMN);
-
-            $assignedCount = 0;
-            // Loop fromIdx to toIdx (1-indexed based UI indices)
-            for ($i = $fromIdx - 1; $i < $toIdx; $i++) {
-                if (isset($groupIds[$i])) {
-                    $stmtUpdate = $pdo->prepare("UPDATE project_groups SET mentor_id = ? WHERE id = ?");
-                    $stmtUpdate->execute([$mentorId, $groupIds[$i]]);
-                    $assignedCount++;
+                if ($existingMentor && $existingMentor != $mentorId) {
+                    $conflictGroups[] = $i;
                 }
             }
 
+            if (count($conflictGroups) > 0) {
+                echo json_encode(['success' => false, 'error' => "Cross-pathing detected! Groups " . implode(', ', $conflictGroups) . " already have a different mentor assigned. Assignment aborted."]);
+                exit;
+            }
+
+            $assignedCount = 0;
+            for ($i = $fromIdx; $i <= $toIdx; $i++) {
+                $groupNameStr = (string)$i;
+                
+                // 1. Save to mentor_assignments for future groups
+                $stmtDel = $pdo->prepare("DELETE FROM mentor_assignments WHERE academic_year=? AND year=? AND sem=? AND LOWER(division)=? AND group_name=?");
+                $stmtDel->execute([$academicYear, $year, $sem, strtolower($division), $groupNameStr]);
+                
+                $stmtInsert = $pdo->prepare("INSERT INTO mentor_assignments (academic_year, year, sem, division, group_name, mentor_id) VALUES (?, ?, ?, ?, ?, ?)");
+                $stmtInsert->execute([$academicYear, $year, $sem, strtolower($division), $groupNameStr, $mentorId]);
+                
+                // 2. Update any existing project_groups immediately
+                $stmtUpdate = $pdo->prepare("
+                    UPDATE project_groups 
+                    SET mentor_id = ? 
+                    WHERE academic_year = ? AND year = ? AND sem = ? AND LOWER(division) = ? AND group_name = ?
+                ");
+                $stmtUpdate->execute([$mentorId, $academicYear, $year, $sem, strtolower($division), $groupNameStr]);
+                
+                $assignedCount++;
+            }
+
             echo json_encode(['success' => true, 'assigned_count' => $assignedCount]);
+            break;
+
+        case 'admin_get_stats':
+            checkRole(['admin']);
+            $stmt = $pdo->prepare("SELECT COUNT(*) FROM project_groups WHERE status = 'Given'");
+            $stmt->execute();
+            $pendingReturns = $stmt->fetchColumn();
+
+            echo json_encode([
+                'success' => true,
+                'data' => [
+                    'pending_returns' => $pendingReturns
+                ]
+            ]);
+            break;
+
+        case 'admin_export_csv':
+            checkRole(['admin']);
+            $type = $params['type'];
+            
+            $csvData = [];
+            if ($type === 'inventory') {
+                $stmt = $pdo->prepare("SELECT name, total_qty, available_qty FROM components ORDER BY name ASC");
+                $stmt->execute();
+                $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                $csvData[] = ['Component Name', 'Total Quantity', 'Available Quantity'];
+                foreach ($rows as $row) {
+                    $csvData[] = [$row['name'], $row['total_qty'], $row['available_qty']];
+                }
+            } else if ($type === 'projects') {
+                $stmt = $pdo->prepare("
+                    SELECT g.id, g.group_name, g.academic_year, g.year, g.sem, g.division, u.username as mentor, g.status 
+                    FROM project_groups g 
+                    LEFT JOIN users u ON g.mentor_id = u.id 
+                    ORDER BY g.id ASC
+                ");
+                $stmt->execute();
+                $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                $csvData[] = ['Group ID', 'Group Name', 'Academic Year', 'Year', 'Sem', 'Division', 'Mentor', 'Status'];
+                foreach ($rows as $row) {
+                    $csvData[] = [$row['id'], $row['group_name'], $row['academic_year'], $row['year'], $row['sem'], $row['division'], $row['mentor'], $row['status']];
+                }
+            } else {
+                echo json_encode(['error' => 'Invalid export type']);
+                exit;
+            }
+            
+            // Generate CSV string
+            $output = fopen('php://temp', 'r+');
+            foreach ($csvData as $line) {
+                fputcsv($output, $line);
+            }
+            rewind($output);
+            $csvString = stream_get_contents($output);
+            fclose($output);
+            
+            echo json_encode(['success' => true, 'data' => $csvString]);
             break;
 
         default:

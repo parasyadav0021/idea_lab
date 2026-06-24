@@ -65,6 +65,16 @@ try {
             FOREIGN KEY(group_id) REFERENCES project_groups(id),
             FOREIGN KEY(component_id) REFERENCES components(id)
         );
+
+        CREATE TABLE IF NOT EXISTS mentor_assignments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            academic_year TEXT,
+            year TEXT,
+            sem TEXT,
+            division TEXT,
+            group_name TEXT,
+            mentor_id INTEGER
+        );
     ");
 
     $stmt = $pdo->prepare("SELECT COUNT(*) FROM users");

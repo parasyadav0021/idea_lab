@@ -9,6 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
 </head>
 <body>
@@ -19,9 +20,9 @@
         <aside class="sidebar" id="sidebar">
             <h2 class="text-gradient mb-8">Idea Lab</h2>
             <nav>
-                <a class="nav-item active" onclick="showSection('group-settings')">Group Details</a>
-                <a class="nav-item" onclick="showSection('component-selection')">Component Selection</a>
-                <a class="nav-item" onclick="showSection('order-history')">Order History</a>
+                <a class="nav-item active" onclick="showSection('group-settings')">Project Information</a>
+                <a class="nav-item" onclick="showSection('component-selection')">Inventory Requisition</a>
+                <a class="nav-item" onclick="showSection('order-history')">Requisition History</a>
             </nav>
             <div style="position: absolute; bottom: 2rem;">
                 <button onclick="logout()" class="btn btn-outline">Logout</button>
@@ -34,7 +35,7 @@
                     <button class="mobile-menu-btn" onclick="toggleSidebar()">
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
                     </button>
-                    <h1 id="pageTitle">Group Details</h1>
+                    <h1 id="pageTitle">Project Information</h1>
                 </div>
                 <div class="user-info">
                     <span id="welcomeUser" style="color: var(--text-muted);">Welcome, Leader</span>
@@ -151,7 +152,11 @@
 
             <!-- Order History Section -->
             <section id="order-history" class="glass-panel section-card hidden">
-                <h3>Request History</h3>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                    <h3 style="margin: 0;">Request History</h3>
+                    <button class="btn btn-outline" onclick="downloadSlip()">Download Requisition Slip (PDF)</button>
+                </div>
+                
                 <p class="text-muted mb-6">Manage your component requests.</p>
                 
                 <div class="table-container">

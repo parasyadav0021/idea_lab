@@ -25,9 +25,9 @@
         <aside class="sidebar" id="sidebar">
             <h2 class="text-gradient mb-8">Idea Lab</h2>
             <nav>
-                <a class="nav-item active" id="nav-students" onclick="showAdminSection('students-directory')">Students Directory</a>
-                <a class="nav-item" id="nav-components" onclick="showAdminSection('components')">Components</a>
-                <a class="nav-item" id="nav-edit" onclick="showAdminSection('edit')">Edit</a>
+                <a class="nav-item active" id="nav-students" onclick="showAdminSection('students-directory')">Project Directory</a>
+                <a class="nav-item" id="nav-components" onclick="showAdminSection('components')">Inventory Management</a>
+                <a class="nav-item" id="nav-edit" onclick="showAdminSection('edit')">System Administration</a>
             </nav>
             <div style="position: absolute; bottom: 2rem;">
                 <button onclick="logout()" class="btn btn-outline">Logout</button>
@@ -40,12 +40,21 @@
                     <button class="mobile-menu-btn" onclick="toggleSidebar()">
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
                     </button>
-                    <h1 id="pageTitle">Students Directory</h1>
+                    <h1 id="pageTitle">Project Directory</h1>
                 </div>
                 <div class="user-info">
                     <span id="welcomeUser" style="color: var(--text-muted);">Welcome, Admin</span>
                 </div>
             </header>
+
+            <!-- Admin Stats Widget -->
+            <section id="admin-stats-section" class="stats-grid" style="grid-template-columns: 1fr; max-width: 400px;">
+                <div class="stat-card" style="border-color: var(--secondary);">
+                    <div class="stat-title">Pending Returns</div>
+                    <div class="stat-value" id="stat-pending-returns" style="color: var(--secondary);">0</div>
+                    <svg class="stat-icon" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--secondary)" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                </div>
+            </section>
 
             <section id="students-directory-section" class="glass-panel section-card">
                 <h3 class="mb-4">Filters</h3>
@@ -86,12 +95,15 @@
 
                 <div class="tabs">
                     <div class="tab active" onclick="setTab('Active')" id="tabActive">Active Groups</div>
-                    <div class="tab" onclick="setTab('Return')" id="tabReturn">Return Groups</div>
+                    <div class="tab" onclick="setTab('Return')" id="tabReturn">Pending Return Groups</div>
+                    <div class="tab" onclick="setTab('Returned')" id="tabReturned">Component Returned Groups</div>
+                    <button class="btn btn-outline ml-auto" style="margin-left: auto; align-self: center;" onclick="exportData('projects')">Export CSV</button>
                 </div>
                 
                 <div id="groupsContainer">
                     <!-- Groups populated here -->
                 </div>
+                <div id="groupsPagination" class="pagination-controls" style="text-align: center; margin-top: 20px;"></div>
             </section>
 
             <!-- Components Section -->
@@ -102,6 +114,7 @@
                 
                 <div class="flex gap-4 items-center mb-6">
                     <button class="btn btn-primary" onclick="showAddComponentModal()">+ Add Component</button>
+                    <button class="btn btn-outline" onclick="exportData('inventory')">Export CSV</button>
                     <input type="text" id="adminComponentSearch" class="form-control" style="max-width: 400px;" placeholder="Search components..." oninput="loadAdminComponents()">
                 </div>
 

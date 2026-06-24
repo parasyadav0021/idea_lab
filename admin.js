@@ -20,9 +20,36 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('welcomeUser').textContent = `Welcome, ${currentUser.username}`;
 
     await initDB();
+    await loadAdminStats();
     await loadGroups();
     await loadAdminComponents();
 });
+
+async function loadAdminStats() {
+    const result = await callAPI('admin_get_stats');
+    if (result.success) {
+        document.getElementById('stat-pending-returns').textContent = result.data.pending_returns;
+    }
+}
+
+async function exportData(type) {
+    showToast('Preparing export...', 'success');
+    const result = await callAPI('admin_export_csv', { type });
+    if (result.success) {
+        const blob = new Blob([result.data], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `idea_lab_${type}_export.csv`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+        showToast('Export successful!', 'success');
+    } else {
+        showToast("Export failed: " + (result.error || "Unknown error"), 'error');
+    }
+}
 
 async function logout() {
     try {
@@ -40,6 +67,13 @@ function showAdminSection(sectionId) {
     document.getElementById('components-section').classList.add('hidden');
     document.getElementById('edit-section').classList.add('hidden');
     
+    // Manage stats widget visibility
+    if (sectionId === 'students-directory') {
+        document.getElementById('admin-stats-section').classList.remove('hidden');
+    } else {
+        document.getElementById('admin-stats-section').classList.add('hidden');
+    }
+
     // Remove active class from nav items
     document.getElementById('nav-students').classList.remove('active');
     document.getElementById('nav-components').classList.remove('active');
@@ -50,17 +84,17 @@ function showAdminSection(sectionId) {
     if (sectionId === 'students-directory') {
         document.getElementById('students-directory-section').classList.remove('hidden');
         document.getElementById('nav-students').classList.add('active');
-        if (pageTitle) pageTitle.textContent = 'Students Directory';
+        if (pageTitle) pageTitle.textContent = 'Project Directory';
         loadGroups();
     } else if (sectionId === 'components') {
         document.getElementById('components-section').classList.remove('hidden');
         document.getElementById('nav-components').classList.add('active');
-        if (pageTitle) pageTitle.textContent = 'Components';
+        if (pageTitle) pageTitle.textContent = 'Inventory Management';
         loadAdminComponents();
     } else if (sectionId === 'edit') {
         document.getElementById('edit-section').classList.remove('hidden');
         document.getElementById('nav-edit').classList.add('active');
-        if (pageTitle) pageTitle.textContent = 'Manage Users & Groups';
+        if (pageTitle) pageTitle.textContent = 'System Administration';
         loadUsersList();
         loadEditGroupsList();
         loadAssigneeSection();
@@ -76,6 +110,7 @@ function setTab(tabName) {
     currentTab = tabName;
     document.getElementById('tabActive').classList.toggle('active', tabName === 'Active');
     document.getElementById('tabReturn').classList.toggle('active', tabName === 'Return');
+    document.getElementById('tabReturned').classList.toggle('active', tabName === 'Returned');
     loadGroups();
 }
 
@@ -89,6 +124,10 @@ function toggleGroupDetails(groupId) {
         detailsDiv.classList.add('open');
     }
 }
+
+let allAdminGroups = [];
+let currentAdminGroupPage = 1;
+const adminGroupsPerPage = 10;
 
 async function loadGroups() {
     const yearSelect = document.getElementById('filterAcademicYear').value;
@@ -107,17 +146,39 @@ async function loadGroups() {
         division: divInput
     });
 
-    const validGroups = result.data || [];
+    allAdminGroups = result.data || [];
+    currentAdminGroupPage = 1;
+    renderGroupsPage();
+}
+
+function changeAdminGroupPage(page) {
+    currentAdminGroupPage = page;
+    renderGroupsPage();
+}
+
+function renderGroupsPage() {
+    const container = document.getElementById('groupsContainer');
+    const pagination = document.getElementById('groupsPagination');
     
-    if (validGroups.length === 0) {
+    if (allAdminGroups.length === 0) {
         container.innerHTML = `<p class="text-muted text-center mt-4">No groups ready for administration matching the criteria.</p>`;
+        if(pagination) pagination.innerHTML = '';
         return;
     }
 
+    const totalPages = Math.ceil(allAdminGroups.length / adminGroupsPerPage);
+    if (currentAdminGroupPage > totalPages) currentAdminGroupPage = totalPages;
+    if (currentAdminGroupPage < 1) currentAdminGroupPage = 1;
+
+    const startIdx = (currentAdminGroupPage - 1) * adminGroupsPerPage;
+    const endIdx = startIdx + adminGroupsPerPage;
+    const pageGroups = allAdminGroups.slice(startIdx, endIdx);
+
     container.innerHTML = '';
 
-    for (let i = 0; i < validGroups.length; i++) {
-        let group = validGroups[i];
+    for (let i = 0; i < pageGroups.length; i++) {
+        let group = pageGroups[i];
+        let displayIndex = startIdx + i + 1;
         
         // Fetch students
         const students = group.students || [];
@@ -134,10 +195,10 @@ async function loadGroups() {
             students.forEach(s => {
                 studentsHtml += `
                     <div class="student-list">
-                        <div>${s.name}</div>
-                        <div>${s.roll_no}</div>
-                        <div>${s.email}</div>
-                        <div>${s.phone}</div>
+                        <div>${escapeHTML(s.name)}</div>
+                        <div>${escapeHTML(s.roll_no)}</div>
+                        <div>${escapeHTML(s.email)}</div>
+                        <div>${escapeHTML(s.phone)}</div>
                     </div>
                 `;
             });
@@ -183,7 +244,7 @@ async function loadGroups() {
                     componentsHtml += `
                         <div class="component-grid" style="grid-template-columns: 0.5fr 2fr 1fr 1fr 1fr 1fr;">
                             <div style="display:flex; justify-content:center; align-items:center;">${checkboxHtml}</div>
-                            <div><strong>${req.component_name}</strong></div>
+                            <div><strong>${escapeHTML(req.component_name)}</strong></div>
                             <div>${req.requested_qty}</div>
                             <div>${req.request_time ? req.request_time : 'N/A'}</div>
                             <div><span style="color: ${statusColor}; font-weight: 600;">${displayStatus}</span></div>
@@ -208,7 +269,7 @@ async function loadGroups() {
 
                     componentsHtml += `
                         <div class="component-grid" style="grid-template-columns: 2fr 1fr 1fr 1.5fr;">
-                            <div><strong>${req.component_name}</strong></div>
+                            <div><strong>${escapeHTML(req.component_name)}</strong></div>
                             <div>${req.requested_qty}</div>
                             <div>${req.request_time ? req.request_time : 'N/A'}</div>
                             <div>${actionHtml}</div>
@@ -230,9 +291,12 @@ async function loadGroups() {
         container.innerHTML += `
             <div class="group-card">
                 <div class="group-header" onclick="toggleGroupDetails(${group.id})">
-                    <h4 style="margin: 0;">${i + 1}- ${group.group_name || 'Unnamed Group'}</h4>
+                    <div>
+                        <h4 style="margin: 0;">${displayIndex}- ${escapeHTML(group.group_name || 'Unnamed Group')}</h4>
+                        <span style="font-size: 0.85rem; color: var(--text-muted); display: block; margin-top: 0.35rem;">Assigned Mentor: <strong style="color: var(--text-main);">${escapeHTML(group.mentor_username || 'Not assigned')}</strong></span>
+                    </div>
                     <span class="badge" style="background: rgba(79, 70, 229, 0.1); color: var(--primary); padding: 0.25rem 0.75rem; border-radius: 999px; font-size: 0.8rem;">
-                        ${group.academic_year || 'Year N/A'} | Year ${group.year || '-'}, Sem ${group.sem || '-'} | Div: ${group.division || '-'}
+                        ${escapeHTML(group.academic_year || 'Year N/A')} | Year ${escapeHTML(group.year || '-')}, Sem ${escapeHTML(group.sem || '-')} | Div: ${escapeHTML(group.division || '-')}
                     </span>
                 </div>
                 <div class="group-details" id="group-details-${group.id}">
@@ -241,14 +305,25 @@ async function loadGroups() {
                     
                     <h4 class="mt-6 mb-2">Problem Statement</h4>
                     <div style="background: rgba(255,255,255,0.02); padding: 1rem; border-radius: 8px; border: 1px solid var(--border);">
-                        <strong>${group.problem_statement || 'N/A'}</strong><br>
-                        <span class="text-muted text-sm mt-2 block">${group.description || 'No description provided.'}</span>
+                        <strong>${escapeHTML(group.problem_statement || 'N/A')}</strong><br>
+                        <span class="text-muted text-sm mt-2 block">${escapeHTML(group.description || 'No description provided.')}</span>
                     </div>
 
                     ${componentsHtml}
                 </div>
             </div>
         `;
+    }
+    
+    if (pagination && totalPages > 1) {
+        let html = `<div style="display: flex; justify-content: center; gap: 10px; align-items: center; margin-top: 1.5rem;">`;
+        html += `<button class="btn btn-outline" style="padding: 5px 15px;" ${currentAdminGroupPage === 1 ? 'disabled' : ''} onclick="changeAdminGroupPage(${currentAdminGroupPage - 1})">Prev</button>`;
+        html += `<span style="color: var(--text-muted); font-size: 0.9rem;">Page ${currentAdminGroupPage} of ${totalPages}</span>`;
+        html += `<button class="btn btn-outline" style="padding: 5px 15px;" ${currentAdminGroupPage === totalPages ? 'disabled' : ''} onclick="changeAdminGroupPage(${currentAdminGroupPage + 1})">Next</button>`;
+        html += `</div>`;
+        pagination.innerHTML = html;
+    } else if (pagination) {
+        pagination.innerHTML = '';
     }
 }
 
@@ -271,15 +346,16 @@ async function saveAdminComponents(event, groupId) {
 
     if (result.success) {
         if (result.all_given) {
-            alert("All components given! Group moved to Return section.");
+            showToast("All components given! Group moved to Return section.", "success");
         } else {
-            alert("Saved successfully!");
+            showToast("Saved successfully!", "success");
         }
+        loadGroups();
+        loadAdminStats();
     } else {
-        alert("Failed to save components: " + (result.error || "Unknown error"));
+        showToast("Failed to save components: " + (result.error || "Unknown error"), "error");
+        loadGroups();
     }
-    
-    loadGroups();
 }
 
 async function returnComponent(reqId, compId, qty) {
@@ -292,9 +368,15 @@ async function returnComponent(reqId, compId, qty) {
     });
 
     if (result.success) {
+        if (result.all_returned) {
+            showToast("All components returned! Group moved to Component Returned section.", "success");
+        } else {
+            showToast("Component returned.", "success");
+        }
         loadGroups();
+        loadAdminStats();
     } else {
-        alert("Failed to process component return: " + (result.error || "Unknown error"));
+        showToast("Failed to process component return: " + (result.error || "Unknown error"), "error");
     }
 }
 
@@ -309,8 +391,9 @@ async function rejectAdminRequest(reqId, compId, requestedQty) {
 
     if (result.success) {
         loadGroups();
+        showToast("Request rejected.", "success");
     } else {
-        alert("Failed to reject request: " + (result.error || "Unknown error"));
+        showToast("Failed to reject request: " + (result.error || "Unknown error"), "error");
     }
 }
 
@@ -333,13 +416,13 @@ async function loadAdminComponents() {
     comps.forEach(c => {
         tbody.innerHTML += `
             <tr>
-                <td><strong>${c.name}</strong></td>
-                <td>
+                <td data-label="Component Name"><strong>${c.name}</strong></td>
+                <td data-label="Total Quantity">
                     <span id="qty-text-${c.id}">${c.total_qty}</span>
                     <input type="number" id="qty-input-${c.id}" class="form-control hidden" style="max-width:80px; padding: 0.25rem;" value="${c.total_qty}">
                 </td>
-                <td>${c.available_qty}</td>
-                <td>
+                <td data-label="Available Quantity">${c.available_qty}</td>
+                <td data-label="Actions">
                     <button id="edit-btn-${c.id}" class="btn btn-outline" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;" onclick="enableEditQty(${c.id})">Edit Qty</button>
                     <button id="save-btn-${c.id}" class="btn btn-primary hidden" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;" onclick="saveEditQty(${c.id}, ${c.total_qty}, ${c.available_qty})">Save</button>
                 </td>
@@ -363,7 +446,7 @@ async function saveNewComponent() {
     const qty = parseInt(document.getElementById('newCompQty').value);
 
     if (!name || isNaN(qty) || qty <= 0) {
-        alert("Please enter a valid name and quantity greater than 0.");
+        showToast("Please enter a valid name and quantity greater than 0.", "error");
         return;
     }
 
@@ -371,8 +454,9 @@ async function saveNewComponent() {
     if (result.success) {
         hideAddComponentModal();
         loadAdminComponents();
+        showToast("Component added successfully.", "success");
     } else {
-        alert("Failed to add component: " + (result.error || "Unknown error"));
+        showToast("Failed to add component: " + (result.error || "Unknown error"), "error");
     }
 }
 
@@ -388,15 +472,16 @@ async function saveEditQty(compId, oldTotal, currentAvail) {
     const newTotal = parseInt(input.value);
 
     if (isNaN(newTotal) || newTotal < 0) {
-        alert("Invalid quantity.");
+        showToast("Invalid quantity.", "error");
         return;
     }
 
     const result = await callAPI('admin_edit_component_qty', { id: compId, new_total: newTotal });
     if (result.success) {
         loadAdminComponents();
+        showToast("Quantity updated.", "success");
     } else {
-        alert("Failed to update quantity: " + (result.error || "Unknown error"));
+        showToast("Failed to update quantity: " + (result.error || "Unknown error"), "error");
     }
 }
 
@@ -418,7 +503,7 @@ async function saveNewUser() {
     const role = document.getElementById('newUserRole').value;
 
     if (!name || !pass) {
-        alert("Please enter both username and password.");
+        showToast("Please enter both username and password.", "error");
         return;
     }
 
@@ -426,8 +511,9 @@ async function saveNewUser() {
     if (result.success) {
         hideAddUserModal();
         loadUsersList();
+        showToast("User added.", "success");
     } else {
-        alert("Failed to save user: " + (result.error || "Username already exists"));
+        showToast("Failed to save user: " + (result.error || "Username already exists"), "error");
     }
 }
 
@@ -443,15 +529,16 @@ async function saveEditUser(id) {
     const newPass = input.value.trim();
 
     if (!newPass) {
-        alert("Password cannot be empty.");
+        showToast("Password cannot be empty.", "error");
         return;
     }
 
     const result = await callAPI('admin_edit_user_password', { id, password: newPass });
     if (result.success) {
         loadUsersList();
+        showToast("Password updated.", "success");
     } else {
-        alert("Failed to update password: " + (result.error || "Unknown error"));
+        showToast("Failed to update password: " + (result.error || "Unknown error"), "error");
     }
 }
 
@@ -461,8 +548,9 @@ async function deleteUser(id, role, username) {
     const result = await callAPI('admin_delete_user', { id });
     if (result.success) {
         loadUsersList();
+        showToast("User deleted.", "success");
     } else {
-        alert("Failed to delete user: " + (result.error || "Unknown error"));
+        showToast("Failed to delete user: " + (result.error || "Unknown error"), "error");
     }
 }
 
@@ -486,12 +574,12 @@ async function loadUsersList() {
         mentors.forEach(m => {
             mentorsBody.innerHTML += `
                 <tr>
-                    <td><strong>${m.username}</strong></td>
-                    <td>
+                    <td data-label="Username"><strong>${escapeHTML(m.username)}</strong></td>
+                    <td data-label="Password">
                         <span id="user-pass-text-${m.id}">${m.password}</span>
                         <input type="text" id="user-pass-input-${m.id}" class="form-control hidden" style="max-width:150px; padding: 0.25rem;" value="${m.password}">
                     </td>
-                    <td>
+                    <td data-label="Actions">
                         <button id="edit-user-btn-${m.id}" class="btn btn-outline" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;" onclick="enableEditUser(${m.id})">Edit Password</button>
                         <button id="save-user-btn-${m.id}" class="btn btn-primary hidden" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;" onclick="saveEditUser(${m.id})">Save</button>
                         <button class="btn btn-danger" style="padding: 0.25rem 0.75rem; font-size: 0.8rem; margin-left: 0.5rem;" onclick="deleteUser(${m.id}, '${m.role}', '${m.username}')">Delete</button>
@@ -508,12 +596,12 @@ async function loadUsersList() {
         students.forEach(s => {
             studentsBody.innerHTML += `
                 <tr>
-                    <td><strong>${s.username}</strong></td>
-                    <td>
+                    <td data-label="Username"><strong>${escapeHTML(s.username)}</strong></td>
+                    <td data-label="Password">
                         <span id="user-pass-text-${s.id}">${s.password}</span>
                         <input type="text" id="user-pass-input-${s.id}" class="form-control hidden" style="max-width:150px; padding: 0.25rem;" value="${s.password}">
                     </td>
-                    <td>
+                    <td data-label="Actions">
                         <button id="edit-user-btn-${s.id}" class="btn btn-outline" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;" onclick="enableEditUser(${s.id})">Edit Password</button>
                         <button id="save-user-btn-${s.id}" class="btn btn-primary hidden" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;" onclick="saveEditUser(${s.id})">Save</button>
                         <button class="btn btn-danger" style="padding: 0.25rem 0.75rem; font-size: 0.8rem; margin-left: 0.5rem;" onclick="deleteUser(${s.id}, '${s.role}', '${s.username}')">Delete</button>
@@ -540,11 +628,11 @@ async function loadEditGroupsList() {
     groups.forEach(g => {
         tbody.innerHTML += `
             <tr>
-                <td>${g.id}</td>
-                <td><strong>${g.group_name || 'Unnamed Group'}</strong></td>
-                <td>${g.leader_username || 'Unknown'}</td>
-                <td>${g.status}</td>
-                <td>
+                <td data-label="Group ID">${g.id}</td>
+                <td data-label="Group Name"><strong>${escapeHTML(g.group_name || 'Unnamed Group')}</strong></td>
+                <td data-label="Leader">${escapeHTML(g.leader_username || 'Unknown')}</td>
+                <td data-label="Status">${g.status}</td>
+                <td data-label="Actions">
                     <button class="btn btn-danger" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;" onclick="deleteGroup(${g.id})">Delete Group</button>
                 </td>
             </tr>
@@ -561,8 +649,9 @@ async function deleteGroup(groupId) {
         if (!document.getElementById('students-directory-section').classList.contains('hidden')) {
             loadGroups();
         }
+        showToast("Group deleted.", "success");
     } else {
-        alert("Failed to delete group: " + (result.error || "Unknown error"));
+        showToast("Failed to delete group: " + (result.error || "Unknown error"), "error");
     }
 }
 
@@ -586,20 +675,13 @@ async function previewAssignGroups() {
     const semSelect = document.getElementById('assignSem').value;
     const divInput = document.getElementById('assignDiv').value.trim();
     
-    const result = await callAPI('admin_preview_assign_groups', {
-        academic_year: yearSelect,
-        year: yearLvlSelect,
-        sem: semSelect,
-        division: divInput
-    });
-    
-    currentFilteredGroupsForAssignment = result.data || [];
-    
     const preview = document.getElementById('assignGroupsPreview');
-    if (currentFilteredGroupsForAssignment.length === 0) {
-        preview.innerHTML = "No groups found for the selected filters.";
+    if (yearSelect === 'All' || yearLvlSelect === 'All' || semSelect === 'All' || !divInput) {
+        preview.innerHTML = "Please select specific Academic Year, Year, Semester, and Division to assign mentors.";
+        preview.style.color = "var(--danger)";
     } else {
-        preview.innerHTML = `Found ${currentFilteredGroupsForAssignment.length} groups. (Indexed 1 to ${currentFilteredGroupsForAssignment.length})`;
+        preview.innerHTML = `Ready to pre-assign mentors for Academic Year ${yearSelect}, Year ${yearLvlSelect}, Sem ${semSelect}, Div ${divInput}. Use the form below to assign Group Numbers.`;
+        preview.style.color = "var(--secondary)";
     }
 }
 
@@ -609,22 +691,17 @@ async function applyBatchAssignment() {
     const mentorId = document.getElementById('assignMentorSelect').value;
 
     if (!fromIdx || !toIdx || isNaN(fromIdx) || isNaN(toIdx)) {
-        alert("Please enter valid 'From' and 'To' group numbers.");
+        showToast("Please enter valid 'From' and 'To' group numbers.", "error");
         return;
     }
     
     if (fromIdx > toIdx) {
-        alert("'From' number cannot be greater than 'To' number.");
+        showToast("'From' number cannot be greater than 'To' number.", "error");
         return;
     }
 
     if (!mentorId) {
-        alert("Please select a mentor.");
-        return;
-    }
-
-    if (currentFilteredGroupsForAssignment.length === 0) {
-        alert("No groups available to assign.");
+        showToast("Please select a mentor.", "error");
         return;
     }
 
@@ -644,7 +721,7 @@ async function applyBatchAssignment() {
     });
 
     if (result.success) {
-        alert(`Successfully assigned mentor to ${result.assigned_count} groups!`);
+        showToast(`Successfully assigned mentor to ${result.assigned_count} groups!`, "success");
         document.getElementById('assignFrom').value = '';
         document.getElementById('assignTo').value = '';
         if (!document.getElementById('students-directory-section').classList.contains('hidden')) {
@@ -652,6 +729,6 @@ async function applyBatchAssignment() {
         }
         loadEditGroupsList();
     } else {
-        alert("Failed to execute batch assignment: " + (result.error || "Unknown error"));
+        showToast("Failed to execute batch assignment: " + (result.error || "Unknown error"), "error");
     }
 }

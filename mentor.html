@@ -26,7 +26,7 @@
         <aside class="sidebar" id="sidebar">
             <h2 class="text-gradient mb-8">Idea Lab</h2>
             <nav>
-                <a class="nav-item active">Students Directory</a>
+                <a class="nav-item active">Mentorship Roster</a>
             </nav>
             <div style="position: absolute; bottom: 2rem;">
                 <button onclick="logout()" class="btn btn-outline">Logout</button>
@@ -39,14 +39,16 @@
                     <button class="mobile-menu-btn" onclick="toggleSidebar()">
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
                     </button>
-                    <h1 id="pageTitle">Students Directory</h1>
+                    <h1 id="pageTitle">Mentorship Roster</h1>
                 </div>
                 <div class="user-info">
                     <span id="welcomeUser" style="color: var(--text-muted);">Welcome, Mentor</span>
                 </div>
             </header>
 
-            <section class="glass-panel section-card">
+            <!-- Mentor Stats Widget -->
+
+            <section id="my-projects-section" class="glass-panel section-card">
                 <h3 class="mb-4">Filters</h3>
                 <div class="filter-row">
                     <div class="form-group">
